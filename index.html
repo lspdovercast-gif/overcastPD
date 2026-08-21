@@ -4,8 +4,9 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LSPD Admin — Pregled prijava | OverCast RP</title>
-<link rel="preconnect" href="https://fonts.googleapis.com/">
-<link href="./LSPD Admin — Pregled prijava _ OverCast RP_files/css2" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&amp;display=swap" rel="stylesheet">
 <style>
   :root{
     --navy: #0b1a2e;
@@ -640,19 +641,208 @@
   .btn-ghost{ transition: background 0.15s ease, transform 0.1s ease; }
   .btn-ghost:active{ transform: translateY(1px); }
   .tab-btn{ transition: color 0.15s ease, border-color 0.15s ease; }
+
+  /* ================================================================
+     MODERN REDESIGN LAYER — visual refresh only, no logic touched
+     ================================================================ */
+  :root{
+    --navy: #12233c;
+    --navy-deep: #060e1a;
+    --navy-mid: #16304f;
+    --gold: #cfa653;
+    --gold-bright: #f2cd80;
+    --steel: #7fa3cc;
+    --glass: rgba(236, 231, 219, 0.05);
+    --shadow-lg: 0 32px 70px -25px rgba(0,0,0,0.75);
+    --shadow-card: 0 18px 40px -18px rgba(0,0,0,0.55);
+    --radius-lg: 18px;
+    --radius-md: 10px;
+  }
+
+  html{ scroll-behavior: smooth; }
+
+  body{
+    background:
+      radial-gradient(1100px 550px at 12% -10%, rgba(207,166,83,0.09), transparent 60%),
+      radial-gradient(900px 500px at 108% 6%, rgba(127,163,204,0.12), transparent 55%),
+      linear-gradient(180deg, var(--navy-deep) 0%, #050a13 100%);
+  }
+
+  ::-webkit-scrollbar{ width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track{ background: transparent; }
+  ::-webkit-scrollbar-thumb{ background: rgba(207,166,83,0.35); border-radius: 20px; }
+  ::-webkit-scrollbar-thumb:hover{ background: rgba(207,166,83,0.55); }
+
+  /* ---- Cinematic "night patrol" backdrop, sits behind the auth screens ---- */
+  .noir-bg{
+    position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
+    background:
+      radial-gradient(55% 40% at 18% 12%, rgba(210,69,69,0.16), transparent 60%),
+      radial-gradient(55% 40% at 82% 16%, rgba(91,140,220,0.18), transparent 60%),
+      linear-gradient(180deg, #050a13 0%, #0a1826 55%, #04080f 100%);
+  }
+  .noir-bg::before{
+    content:"";
+    position:absolute; left:0; right:0; bottom:0; height:40%;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 260' preserveAspectRatio='none'><g fill='%23040a12'><rect x='0' y='120' width='60' height='140'/><rect x='70' y='60' width='50' height='200'/><rect x='130' y='150' width='40' height='110'/><rect x='180' y='90' width='70' height='170'/><rect x='260' y='140' width='45' height='120'/><rect x='315' y='40' width='55' height='220'/><rect x='380' y='110' width='60' height='150'/><rect x='450' y='70' width='40' height='190'/><rect x='500' y='160' width='65' height='100'/><rect x='575' y='50' width='50' height='210'/><rect x='635' y='120' width='55' height='140'/><rect x='700' y='95' width='45' height='165'/><rect x='755' y='150' width='70' height='110'/><rect x='835' y='60' width='40' height='200'/><rect x='885' y='130' width='60' height='130'/><rect x='955' y='80' width='50' height='180'/><rect x='1015' y='145' width='65' height='115'/><rect x='1090' y='55' width='45' height='205'/><rect x='1145' y='115' width='55' height='145'/></g></svg>");
+    background-repeat: repeat-x; background-size: 1200px 260px; background-position: bottom;
+    opacity: 0.9;
+  }
+  .noir-bg .beam{
+    position:absolute; top:-40%; left:-20%; width:140%; height:220%;
+    background: conic-gradient(from 200deg at 30% 30%, rgba(210,69,69,0.13), transparent 16%);
+    animation: sweepRed 7s ease-in-out infinite;
+    mix-blend-mode: screen;
+  }
+  .noir-bg .beam.blue{
+    background: conic-gradient(from 20deg at 70% 30%, rgba(91,140,220,0.15), transparent 16%);
+    animation: sweepBlue 7s ease-in-out infinite;
+  }
+  @keyframes sweepRed{ 0%,100%{ transform: rotate(-8deg);} 50%{ transform: rotate(8deg);} }
+  @keyframes sweepBlue{ 0%,100%{ transform: rotate(8deg);} 50%{ transform: rotate(-8deg);} }
+  @keyframes fadeUp{ from{ opacity:0; transform: translateY(14px);} to{ opacity:1; transform:none;} }
+
+  #landingScreen, #applyScreen, #loginScreen{ position: relative; z-index: 1; }
+
+  /* ---- Landing screen ---- */
+  #landingScreen{
+    min-height: calc(100vh - 40px);
+    display:flex; align-items:center; justify-content:center; padding:24px;
+  }
+  .landing-card{
+    width:100%; max-width:440px; text-align:center;
+    background: linear-gradient(180deg, rgba(236,231,219,0.07), rgba(236,231,219,0.02));
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    box-shadow: var(--shadow-lg);
+    padding: 46px 34px 38px;
+    animation: fadeUp 0.6s ease both;
+  }
+  .landing-card .badge-mini{
+    width:72px; height:72px; margin:0 auto 18px;
+    border:2px solid var(--gold); border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow: 0 0 0 6px rgba(207,166,83,0.08), 0 10px 30px -10px rgba(207,166,83,0.5);
+  }
+  .landing-card .badge-mini span{ font-family:'Bebas Neue',sans-serif; font-size:1.5rem; color:var(--gold-bright); }
+  .landing-card h1{
+    font-family:'Bebas Neue',sans-serif; font-size:2.2rem; letter-spacing:0.04em;
+    color: var(--paper); margin:0 0 8px;
+  }
+  .landing-card p.tag{
+    font-family:'JetBrains Mono',monospace; font-size:0.74rem; letter-spacing:0.1em;
+    text-transform:uppercase; color:var(--steel); margin:0 0 32px;
+  }
+  .landing-actions{ display:flex; flex-direction:column; gap:12px; }
+  .landing-btn{
+    font-family:'JetBrains Mono',monospace; font-size:0.85rem; letter-spacing:0.06em; text-transform:uppercase;
+    padding:15px 22px; border-radius: var(--radius-md); cursor:pointer; font-weight:700;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    border:1px solid transparent;
+  }
+  .landing-btn.primary{
+    background: linear-gradient(135deg, var(--gold), var(--gold-bright));
+    color: var(--navy-deep);
+    box-shadow: 0 14px 30px -12px rgba(207,166,83,0.55);
+  }
+  .landing-btn.primary:hover{ transform: translateY(-2px); box-shadow: 0 18px 38px -12px rgba(207,166,83,0.7); }
+  .landing-btn.secondary{
+    background: rgba(236,231,219,0.04);
+    border-color: var(--line);
+    color: var(--paper);
+  }
+  .landing-btn.secondary:hover{ background: rgba(236,231,219,0.09); transform: translateY(-2px); }
+
+  /* ---- Modernized auth cards ---- */
+  .login-card{
+    border-radius: var(--radius-lg) !important;
+    box-shadow: var(--shadow-lg) !important;
+    animation: fadeUp 0.5s ease both;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .login-head{
+    background: linear-gradient(160deg, var(--navy-mid), var(--navy-deep)) !important;
+  }
+  .login-btn{
+    border-radius: var(--radius-md) !important;
+    background: linear-gradient(135deg, var(--navy-deep), var(--navy-mid)) !important;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: 0 12px 26px -14px rgba(0,0,0,0.6);
+  }
+  .login-btn:hover:not(:disabled){ transform: translateY(-2px); box-shadow: 0 16px 32px -14px rgba(0,0,0,0.7); }
+  .field input, textarea{ border-radius: 8px !important; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+  .field input:focus{ box-shadow: 0 0 0 3px rgba(18,35,60,0.12); }
+
+  /* ---- Dashboard polish ---- */
+  #dashboard{ position:relative; z-index:1; background: var(--navy-deep); }
+  .dash-header{ background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent); }
+  .dash-header h1{ font-size:2.1rem; }
+  .btn-ghost{ border-radius: 999px !important; transition: background 0.15s ease, transform 0.15s ease; }
+  .btn-ghost:hover{ transform: translateY(-1px); }
+
+  .tab-nav{
+    gap:6px !important;
+    padding: 12px 24px !important;
+    position: sticky; top:0; z-index:5;
+    background: rgba(6,14,26,0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line) !important;
+  }
+  .tab-btn{ border-radius:999px !important; border-bottom:none !important; padding:10px 16px !important; }
+  .tab-btn.active{
+    background: linear-gradient(135deg, var(--gold), var(--gold-bright)) !important;
+    color: var(--navy-deep) !important;
+    box-shadow: 0 10px 22px -12px rgba(207,166,83,0.6);
+  }
+  .tab-panel.active{ animation: fadeUp 0.4s ease both; }
+
+  .app-card, .sop-doc, .sheet-wrap, .bulletin-post, .media-card, .media-add-card{
+    border-radius: var(--radius-lg) !important;
+  }
+  .app-card, .bulletin-post, .media-add-card{
+    box-shadow: var(--shadow-card) !important;
+  }
+  .app-card:hover{ transform: translateY(-2px); }
+  .btn-add{ border-radius: 999px !important; box-shadow: 0 12px 26px -14px rgba(207,166,83,0.5); }
+  .row-del, .media-del, .chip-remove{ border-radius: 999px !important; }
+  .media-card img{ transition: transform 0.3s ease; }
+  .media-card:hover img{ transform: scale(1.06); }
+
+  @media (max-width: 620px){
+    .landing-card{ padding: 34px 22px 28px; }
+  }
 </style>
 
   <script src="auth-gate.js"></script>
 </head>
 <body class="">
 
+  <div class="noir-bg" aria-hidden="true">
+    <div class="beam"></div>
+    <div class="beam blue"></div>
+  </div>
 
   <div class="topstrip">
     <span class="mono">OVERCAST RP</span>
     <span class="mono">LSPD ADMIN PANEL</span>
   </div>
 
-  <div id="applyScreen" style="display: flex;">
+  <div id="landingScreen" style="display: flex;">
+    <div class="landing-card">
+      <div class="badge-mini"><span>LS</span></div>
+      <h1>OVERCAST RP</h1>
+      <p class="tag">Los Santos Police Department</p>
+      <div class="landing-actions">
+        <button type="button" class="landing-btn primary" id="landingLoginBtn">Prijavi se</button>
+        <button type="button" class="landing-btn secondary" id="landingApplyBtn">Pošalji prijavu</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="applyScreen" style="display: none;">
     <div class="login-card" style="max-width: 480px;">
       <div class="login-head">
         <div class="badge-mini"><span>LS</span></div>
@@ -691,6 +881,9 @@
         <p style="text-align:center; margin-top:16px; font-family:'JetBrains Mono', monospace; font-size:0.72rem;">
           <a href="#" id="showLoginLink" style="color: var(--steel);">Već si u LSPD-u? Prijavi se</a>
         </p>
+        <p style="text-align:center; margin-top:8px; font-family:'JetBrains Mono', monospace; font-size:0.68rem;">
+          <a href="#" id="backToLandingFromApply" style="color: var(--steel); opacity:0.7;">← Nazad na početnu</a>
+        </p>
       </div>
       <div class="login-body" id="applySuccess" style="display:none; text-align:center;">
         <p style="font-size:1rem; color:#2c2a22;">Hvala! Razmotrićemo tvoju prijavu u najkraćem mogućem roku.</p>
@@ -721,9 +914,33 @@
         <p style="text-align:center; margin-top:16px; font-family:'JetBrains Mono', monospace; font-size:0.72rem;">
           <a href="#" id="backToApplyLink" style="color: var(--steel);">Nisi u LSPD-u? Popuni prijavu</a>
         </p>
+        <p style="text-align:center; margin-top:8px; font-family:'JetBrains Mono', monospace; font-size:0.68rem;">
+          <a href="#" id="backToLandingFromLogin" style="color: var(--steel); opacity:0.7;">← Nazad na početnu</a>
+        </p>
       </div>
     </div>
   </div>
+
+  <script>
+  (function(){
+    var landing = document.getElementById('landingScreen');
+    var apply = document.getElementById('applyScreen');
+    var login = document.getElementById('loginScreen');
+    function go(hide1, hide2, show){
+      if(hide1) hide1.style.display = 'none';
+      if(hide2) hide2.style.display = 'none';
+      if(show) show.style.display = 'flex';
+    }
+    var landingLoginBtn = document.getElementById('landingLoginBtn');
+    var landingApplyBtn = document.getElementById('landingApplyBtn');
+    var backToLandingFromApply = document.getElementById('backToLandingFromApply');
+    var backToLandingFromLogin = document.getElementById('backToLandingFromLogin');
+    if(landingLoginBtn) landingLoginBtn.addEventListener('click', function(){ go(landing, apply, login); });
+    if(landingApplyBtn) landingApplyBtn.addEventListener('click', function(){ go(landing, login, apply); });
+    if(backToLandingFromApply) backToLandingFromApply.addEventListener('click', function(e){ e.preventDefault(); go(apply, login, landing); });
+    if(backToLandingFromLogin) backToLandingFromLogin.addEventListener('click', function(e){ e.preventDefault(); go(login, apply, landing); });
+  })();
+  </script>
 
   <div id="dashboard" class="">
     <div class="dash-header">
