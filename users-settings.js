@@ -1,109 +1,86 @@
-/* OverCast RP — Settings / Users list
-   Uses the secure Supabase Edge Function list-users.
-   No service-role key is ever exposed here. */
+/* OverCast RP — Settings / Users bridge
+   The existing index.html already has the users table and its loadAdminUsers().
+   We only replace the READ of admin_permissions with the secure list-users
+   Edge Function. PATCH requests still go directly to admin_permissions. */
 (function () {
-  const FUNCTION_URL = 'https://rjusdokmtdnwvsuvxjow.supabase.co/functions/v1/list-users';
+  const SUPABASE_URL = 'https://rjusdokmtdnwvsuvxjow.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_-aKDZyBp1l5IRsGPmlGnsw_nPY_c827';
+  const FUNCTION_URL = SUPABASE_URL + '/functions/v1/list-users';
+  const originalFetch = window.fetch.bind(window);
 
-  function getAccessToken() {
-    // Supabase stores the browser session in a localStorage entry like:
-    // sb-<project-ref>-auth-token
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i) || '';
-      if (!key.includes('auth-token')) continue;
+  function getUrl(input) {
+    return typeof input === 'string' ? input : (input && input.url) || '';
+  }
+
+  function getMethod(input, init) {
+    return ((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+  }
+
+  function isUsersRead(input, init) {
+    return getMethod(input, init) === 'GET' &&
+      /\/rest\/v1\/admin_permissions\?select=\*/i.test(getUrl(input));
+  }
+
+  function getAuthHeader(input, init) {
+    const headers = new Headers((init && init.headers) || (input && input.headers) || {});
+    return headers.get('Authorization') || '';
+  }
+
+  async function loadAllUsers(input, init) {
+    const authorization = getAuthHeader(input, init);
+    if (!authorization) {
+      throw new Error('Nema aktivne administratorske sesije.');
+    }
+
+    const res = await originalFetch(FUNCTION_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': authorization
+      },
+      body: '{}'
+    });
+
+    const data = await res.json().catch(function () { return {}; });
+    if (!res.ok) {
+      throw new Error(data.error || ('Greška pri učitavanju korisnika (status ' + res.status + ').'));
+    }
+
+    return (data.users || []).map(function (u) {
+      return {
+        id: u.id,
+        user_id: u.id,
+        email: u.email || '',
+        fullname: u.fullname || '',
+        discord: u.discord || '',
+        case_id: u.case_id || '',
+        status: u.status || 'Nema prijave',
+        created_at: u.created_at || null,
+        is_admin: !!u.is_admin,
+        is_super_admin: !!u.is_super_admin,
+        can_view_applications: !!u.can_view_applications
+      };
+    });
+  }
+
+  window.fetch = async function (input, init) {
+    if (isUsersRead(input, init)) {
       try {
-        const value = JSON.parse(localStorage.getItem(key));
-        if (value && value.access_token) return value.access_token;
-      } catch (_) {}
-    }
-    return null;
-  }
-
-  function esc(value) {
-    return String(value ?? '').replace(/[&<>"']/g, function (c) {
-      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
-    });
-  }
-
-  function findBody() {
-    return document.getElementById('adminUsersBody');
-  }
-
-  function renderUsers(users) {
-    const body = findBody();
-    if (!body) return;
-
-    if (!users.length) {
-      body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:25px;">Nema registrovanih korisnika.</td></tr>';
-      return;
+        const users = await loadAllUsers(input, init);
+        return new Response(JSON.stringify(users), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (err) {
+        console.error('Settings users:', err);
+        return new Response(JSON.stringify({ error: err.message || 'Greška' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
     }
 
-    body.innerHTML = users.map(function (u) {
-      const admin = u.is_super_admin ? '👑 Super Admin' : (u.is_admin ? '🛡️ Admin' : '—');
-      return '<tr data-id="' + esc(u.id) + '">' +
-        '<td>' + esc(u.email || '—') + '</td>' +
-        '<td>' + esc(u.fullname || '—') + '</td>' +
-        '<td>' + esc(u.discord || '—') + '</td>' +
-        '<td>' + esc(u.status || 'Nema prijave') + '</td>' +
-        '<td>' + admin + '</td>' +
-        '<td>' + esc(u.created_at ? new Date(u.created_at).toLocaleDateString('sr-Latn-ME') : '—') + '</td>' +
-      '</tr>';
-    }).join('');
-  }
-
-  async function loadUsers() {
-    const body = findBody();
-    const status = document.getElementById('adminUsersStatusRow');
-    if (!body) return;
-
-    if (status) status.textContent = 'Učitavanje svih korisnika...';
-
-    const token = getAccessToken();
-    if (!token) {
-      if (status) status.textContent = 'Nema aktivne sesije.';
-      return;
-    }
-
-    try {
-      const res = await fetch(FUNCTION_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer ' + token,
-          'Content-Type': 'application/json'
-        },
-        body: '{}'
-      });
-
-      const data = await res.json().catch(function () { return {}; });
-      if (!res.ok) throw new Error(data.error || ('Greška pri učitavanju (status ' + res.status + ').'));
-
-      const users = data.users || [];
-      renderUsers(users);
-      if (status) status.textContent = 'Ukupno registrovanih korisnika: ' + users.length;
-    } catch (err) {
-      console.error('list-users:', err);
-      if (status) status.textContent = err.message || 'Greška pri učitavanju korisnika.';
-    }
-  }
-
-  function start() {
-    if (!findBody()) return;
-
-    // Load once after the existing page has initialized its Settings UI.
-    setTimeout(loadUsers, 500);
-
-    // When the Settings tab is opened, refresh the list.
-    document.addEventListener('click', function (e) {
-      const btn = e.target.closest('.tab-btn');
-      if (!btn) return;
-      setTimeout(function () {
-        if (findBody()) loadUsers();
-      }, 350);
-    });
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', start);
-  } else {
-    start();
-  }
+    return originalFetch(input, init);
+  };
 })();
