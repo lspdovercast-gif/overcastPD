@@ -1,192 +1,2079 @@
--- =========================================================
--- LSPD ADMIN PANEL — kompletna SQL setup skripta
--- Pokreni ovo u Supabase: SQL Editor -> New query -> Run
--- =========================================================
+<!DOCTYPE html>
+<!-- saved from url=(0050)file:///C:/Users/andro/Downloads/lspd-admin_3.html -->
+<html lang="sr"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
--- ---------- ADMIN_PERMISSIONS (ko je admin/super admin) ----------
-create table if not exists admin_permissions (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  email text,
-  fullname text,
-  rank text,
-  is_admin boolean default false,
-  is_super_admin boolean default false,
-  can_view_applications boolean default false
-);
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LSPD Admin — Pregled prijava | OverCast RP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com/">
+<link href="./LSPD Admin — Pregled prijava _ OverCast RP_files/css2" rel="stylesheet">
+<style>
+  :root{
+    --navy: #0b1a2e;
+    --navy-deep: #071322;
+    --paper: #ece7db;
+    --paper-dim: #d8d2c2;
+    --gold: #c8a24a;
+    --gold-bright: #e0bc66;
+    --steel: #5b7ea3;
+    --redline: #a03a3a;
+    --line: rgba(200,162,74,0.25);
+    --ok: #4f7a5a;
+  }
+  *{ box-sizing: border-box; }
+  body{
+    margin:0;
+    min-height:100vh;
+    background: var(--navy-deep);
+    color: var(--paper);
+    font-family: 'Source Serif 4', serif;
+    line-height: 1.6;
+  }
+  .mono{ font-family:'JetBrains Mono', monospace; letter-spacing: 0.04em; }
 
-alter table admin_permissions enable row level security;
+  .topstrip{
+    background: var(--navy-deep);
+    border-bottom: 1px solid var(--line);
+    padding: 8px 24px;
+    display:flex;
+    justify-content: space-between;
+    align-items:center;
+    font-size: 0.72rem;
+    color: var(--paper-dim);
+  }
+  .topstrip span{ opacity:0.75; }
 
-create policy "Ulogovani mogu čitati sve profile" on admin_permissions
-  for select to authenticated using (true);
+  /* ---------- Login screen ---------- */
+  #loginScreen{
+    min-height: calc(100vh - 40px);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding: 24px;
+  }
+  .login-card{
+    width: 100%;
+    max-width: 380px;
+    background: var(--paper);
+    color: var(--navy-deep);
+    border-radius: 3px;
+    box-shadow: 0 30px 60px -20px rgba(0,0,0,0.6);
+    overflow:hidden;
+  }
+  .login-head{
+    background: var(--navy-deep);
+    color: var(--paper);
+    padding: 26px 30px;
+    text-align:center;
+  }
+  .login-head .badge-mini{
+    width: 56px; height: 56px;
+    border: 2px solid var(--gold);
+    border-radius: 50%;
+    display:flex; align-items:center; justify-content:center;
+    margin: 0 auto 12px;
+  }
+  .login-head .badge-mini span{
+    font-family:'Bebas Neue', sans-serif;
+    font-size: 1.1rem;
+    color: var(--gold-bright);
+  }
+  .login-head h1{
+    font-family:'Bebas Neue', sans-serif;
+    font-size: 1.5rem;
+    letter-spacing: 0.03em;
+    margin: 0;
+  }
+  .login-head p{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--steel);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 6px 0 0;
+  }
+  .login-body{ padding: 28px 30px 30px; }
+  .field{ margin-bottom: 18px; }
+  .field label{
+    display:block;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #5b5443;
+    margin-bottom: 7px;
+  }
+  .field input{
+    width: 100%;
+    font-family: 'Source Serif 4', serif;
+    font-size: 0.98rem;
+    padding: 11px 12px;
+    border: 1px solid #b8ae95;
+    border-radius: 2px;
+    background: #fbf9f3;
+    color: var(--navy-deep);
+  }
+  .field input:focus{
+    outline: 2px solid var(--navy);
+    outline-offset: 1px;
+  }
+  .login-btn{
+    width: 100%;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 13px 24px;
+    border-radius: 2px;
+    cursor:pointer;
+    border: 1px solid var(--navy-deep);
+    background: var(--navy-deep);
+    color: var(--gold-bright);
+    font-weight: 700;
+    margin-top: 6px;
+  }
+  .login-btn:hover{ background: #1a2c44; }
+  .login-btn:disabled{ opacity: 0.5; cursor:not-allowed; }
+  .login-error{
+    display:none;
+    margin-top: 14px;
+    padding: 10px 12px;
+    background: rgba(160,58,58,0.08);
+    border: 1px solid var(--redline);
+    color: var(--redline);
+    font-size: 0.82rem;
+    border-radius: 2px;
+  }
+  .login-error.show{ display:block; }
 
-create policy "Samo super admin mijenja dozvole" on admin_permissions
-  for update to authenticated using (
-    exists (select 1 from admin_permissions ap where ap.user_id = auth.uid() and ap.is_super_admin = true)
-  );
+  /* ---------- Dashboard ---------- */
+  #dashboard{ display:none; }
+  #dashboard.show{ display:block; }
 
-create policy "Samo super admin dodaje profile" on admin_permissions
-  for insert to authenticated with check (
-    exists (select 1 from admin_permissions ap where ap.user_id = auth.uid() and ap.is_super_admin = true)
-  );
+  .dash-header{
+    padding: 26px 24px;
+    border-bottom: 1px solid var(--line);
+    display:flex;
+    justify-content: space-between;
+    align-items:center;
+    flex-wrap:wrap;
+    gap: 14px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .dash-header h1{
+    font-family:'Bebas Neue', sans-serif;
+    font-size: 1.8rem;
+    letter-spacing: 0.02em;
+    margin: 0;
+  }
+  .dash-header .sub{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--steel);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 4px;
+  }
+  .dash-actions{ display:flex; gap: 10px; }
+  .btn-ghost{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 9px 16px;
+    border-radius: 2px;
+    cursor:pointer;
+    border: 1px solid var(--gold);
+    background: transparent;
+    color: var(--gold-bright);
+  }
+  .btn-ghost:hover{ background: var(--gold); color: var(--navy-deep); }
 
--- ---------- APPLICATIONS (prijave) ----------
-create table if not exists applications (
-  id bigint generated always as identity primary key,
-  case_id text,
-  fullname text,
-  discord text,
-  contact text,
-  age text,
-  experience text,
-  motivation text,
-  scenario text,
-  status text default 'Na čekanju',
-  created_at timestamptz default now()
-);
+  .dash-body{ max-width: 1100px; margin: 0 auto; padding: 28px 24px 60px; }
 
-alter table applications enable row level security;
+  .status-row{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--steel);
+    margin-bottom: 20px;
+  }
 
-create policy "Ulogovani sa dozvolom čitaju prijave" on applications
-  for select to authenticated using (
-    exists (select 1 from admin_permissions ap where ap.user_id = auth.uid() and ap.can_view_applications = true)
-  );
+  .app-grid{
+    display:grid;
+    gap: 16px;
+  }
+  .app-card{
+    background: var(--paper);
+    color: var(--navy-deep);
+    border-radius: 3px;
+    padding: 20px 22px;
+    box-shadow: 0 12px 30px -16px rgba(0,0,0,0.5);
+  }
+  .app-card-head{
+    display:flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #d8d2c2;
+  }
+  .app-card-head .name{
+    font-family:'Bebas Neue', sans-serif;
+    font-size: 1.3rem;
+    letter-spacing: 0.02em;
+  }
+  .app-card-head .caseid{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: #7a725c;
+  }
+  .app-meta{
+    display:flex; flex-wrap:wrap; gap: 8px 20px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.76rem;
+    color: #5b5443;
+    margin-bottom: 14px;
+  }
+  .app-meta b{ color: var(--navy-deep); font-weight:700; }
+  .app-field{ margin-bottom: 10px; }
+  .app-field .lbl{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #7a725c;
+    margin-bottom: 3px;
+  }
+  .app-field .val{ font-size: 0.92rem; color: #2c2a22; }
 
-create policy "Admin mijenja/briše prijave" on applications
-  for update to authenticated using (
-    exists (select 1 from admin_permissions ap where ap.user_id = auth.uid() and ap.is_admin = true)
-  );
+  .empty-state{
+    text-align:center;
+    padding: 60px 20px;
+    color: var(--steel);
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+  }
 
-create policy "Admin briše prijave" on applications
-  for delete to authenticated using (
-    exists (select 1 from admin_permissions ap where ap.user_id = auth.uid() and ap.is_admin = true)
-  );
+  @media (max-width: 620px){
+    .login-card{ max-width: 100%; }
+    .app-card{ padding: 16px; }
+  }
 
--- Ako imaš JAVNU formu za prijave (van ovog panela), otkomentariši ovo
--- da bi svako mogao da pošalje prijavu bez logina:
--- create policy "Svako može poslati prijavu" on applications
---   for insert to anon with check (true);
+  /* ---------- Tabs ---------- */
+  .tab-nav{
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+    display:flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--line);
+  }
+  .tab-btn{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 14px 18px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--steel);
+    cursor: pointer;
+  }
+  .tab-btn:hover{ color: var(--paper-dim); }
+  .tab-btn.active{
+    color: var(--gold-bright);
+    border-bottom-color: var(--gold);
+  }
+  .tab-panel{ display:none; }
+  .tab-panel.active{ display:block; }
 
--- ---------- ROSTER (Sheet tab) ----------
-create table if not exists roster (
-  id bigint generated always as identity primary key,
-  fullname text,
-  rank text,
-  certificates text,
-  strikes text
-);
+  /* ---------- SOP tab ---------- */
+  .sop-doc{
+    max-width: 820px;
+    margin: 0 auto;
+    background: var(--paper);
+    color: var(--navy-deep);
+    border-radius: 3px;
+    padding: 40px 46px;
+    box-shadow: 0 20px 50px -20px rgba(0,0,0,0.55);
+  }
+  .sop-doc h2{
+    font-family:'Bebas Neue', sans-serif;
+    font-size: 1.5rem;
+    letter-spacing: 0.02em;
+    margin: 28px 0 10px;
+    color: var(--navy-deep);
+  }
+  .sop-doc h2:first-child{ margin-top: 0; }
+  .sop-doc p{ margin: 0 0 12px; font-size: 0.95rem; color: #2c2a22; }
+  .sop-doc .sop-placeholder{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    color: #7a725c;
+    text-align:center;
+    padding: 30px 10px;
+  }
+  .sop-doc h3{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6a6350;
+    margin: 22px 0 8px;
+  }
+  .sop-doc ol{ margin: 0 0 16px 22px; padding:0; }
+  .sop-doc ol li{ margin-bottom: 7px; font-size: 0.95rem; color: #2c2a22; }
+  .sop-doc .note-box{
+    border-left: 3px solid var(--gold);
+    background: rgba(200,162,74,0.08);
+    padding: 12px 16px;
+    margin: 14px 0;
+    font-size: 0.9rem;
+  }
+  .sop-doc .warn-box{
+    border-left: 3px solid var(--redline);
+    background: rgba(160,58,58,0.08);
+    padding: 12px 16px;
+    margin: 14px 0;
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+  .sop-doc .quote-box{
+    border: 1px dashed #b8ae95;
+    padding: 14px 18px;
+    margin: 14px 0;
+    font-style: italic;
+    font-size: 0.92rem;
+  }
+  .sop-doc hr{ border:none; border-top: 1px solid #d8d2c2; margin: 26px 0; }
+  .sop-doc .sig{ text-align:right; font-style: italic; margin-top: 30px; }
 
-alter table roster enable row level security;
+  /* ---------- Sheet tab ---------- */
+  .sheet-wrap{
+    background: var(--paper);
+    color: var(--navy-deep);
+    border-radius: 3px;
+    box-shadow: 0 20px 50px -20px rgba(0,0,0,0.55);
+    overflow: auto;
+  }
+  table.sheet-table{
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+  }
+  table.sheet-table thead th{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-align:left;
+    padding: 12px 14px;
+    background: var(--navy-deep);
+    color: var(--gold-bright);
+    position: sticky; top:0;
+  }
+  table.sheet-table td{
+    padding: 8px 10px;
+    border-bottom: 1px solid #d8d2c2;
+    vertical-align: middle;
+  }
+  table.sheet-table input[type="text"]{
+    width: 100%;
+    border: 1px solid transparent;
+    background: transparent;
+    font-family:'Source Serif 4', serif;
+    font-size: 0.9rem;
+    color: var(--navy-deep);
+    padding: 6px 8px;
+    border-radius: 2px;
+  }
+  table.sheet-table input[type="text"]:hover,
+  table.sheet-table input[type="text"]:focus{
+    border-color: #b8ae95;
+    background: #fbf9f3;
+    outline: none;
+  }
+  table.sheet-table select{
+    width: 100%;
+    border: 1px solid #b8ae95;
+    background: #fbf9f3;
+    font-family:'Source Serif 4', serif;
+    font-size: 0.85rem;
+    color: var(--navy-deep);
+    padding: 6px 8px;
+    border-radius: 2px;
+  }
+  select.strike-select[data-val="5 strike poena"]{ background: #cfe3d3; border-color: var(--ok); font-weight:600; }
+  select.strike-select[data-val="10 strike poena"]{ background: #f3e3ad; border-color: #b8952c; font-weight:600; }
+  select.strike-select[data-val="15 strike poena"]{ background: #eec3c3; border-color: var(--redline); font-weight:600; }
+  .cert-cell{ display:flex; flex-direction:column; gap: 6px; }
+  .cert-chips{ display:flex; flex-wrap:wrap; gap: 6px; }
+  .cert-chip{
+    display:inline-flex; align-items:center; gap: 6px;
+    background: rgba(11,26,46,0.08);
+    border: 1px solid #b8ae95;
+    color: var(--navy-deep);
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    padding: 4px 6px 4px 10px;
+    border-radius: 12px;
+  }
+  .chip-remove{
+    background: transparent;
+    border: none;
+    color: #a03a3a;
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1;
+    padding: 0 2px;
+  }
+  .chip-remove:hover{ color: #6e2626; }
+  .cert-add-select{
+    border: 1px solid #b8ae95;
+    background: #fbf9f3;
+    font-family:'Source Serif 4', serif;
+    font-size: 0.82rem;
+    color: var(--navy-deep);
+    padding: 5px 8px;
+    border-radius: 2px;
+  }
+  .row-del{
+    background: transparent;
+    border: 1px solid #c99;
+    color: #a03a3a;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    padding: 6px 9px;
+    border-radius: 2px;
+    cursor:pointer;
+    white-space: nowrap;
+  }
+  .row-del:hover{ background: #a03a3a; color: #fff; }
+  .sheet-toolbar{
+    display:flex; justify-content: space-between; align-items:center;
+    margin-bottom: 16px; flex-wrap: wrap; gap: 10px;
+  }
+  .btn-add{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 10px 18px;
+    border-radius: 2px;
+    cursor:pointer;
+    border: 1px solid var(--gold);
+    background: var(--gold);
+    color: var(--navy-deep);
+    font-weight: 700;
+    transition: background 0.15s ease, transform 0.1s ease;
+  }
+  .btn-add:hover{ background: var(--gold-bright); transform: translateY(-1px); }
+  .btn-add:active{ transform: translateY(0); }
 
-create policy "Ulogovani čitaju roster" on roster
-  for select to authenticated using (true);
+  /* ---------- Read-only mode (non-admin) ---------- */
+  .admin-only{ display: none !important; }
+  body.is-admin .admin-only{ display: revert !important; }
+  body.is-admin table.sheet-table th.admin-only{ display: table-cell !important; }
+  body.is-admin .media-add-card.admin-only{ display: block !important; }
+  body:not(.is-admin) .sheet-table input,
+  body:not(.is-admin) .sheet-table select{
+    pointer-events: none;
+    background: transparent !important;
+    border-color: transparent !important;
+  }
+  .view-only-badge{
+    display:none;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--steel);
+    border: 1px solid var(--line);
+    padding: 3px 9px;
+    border-radius: 12px;
+    margin-left: 10px;
+  }
+  body:not(.is-admin) .view-only-badge{ display: inline-block; }
 
-create policy "Admin uređuje roster" on roster
-  for all to authenticated using (
-    exists (select 1 from admin_permissions ap where ap.user_id = auth.uid() and ap.is_admin = true)
-  );
+  /* ---------- Media tab ---------- */
+  .media-add-card{
+    background: var(--paper);
+    color: var(--navy-deep);
+    border-radius: 3px;
+    padding: 18px 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 12px 30px -18px rgba(0,0,0,0.5);
+  }
+  .media-add-title{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #6a6350;
+    margin-bottom: 10px;
+  }
+  .media-add-row{ display:flex; gap: 10px; flex-wrap: wrap; }
+  .media-add-row input{
+    flex: 1 1 220px;
+    font-family: 'Source Serif 4', serif;
+    font-size: 0.9rem;
+    padding: 10px 12px;
+    border: 1px solid #b8ae95;
+    border-radius: 2px;
+    background: #fbf9f3;
+    color: var(--navy-deep);
+  }
+  .media-grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+  }
+  .media-card{
+    background: var(--paper);
+    border-radius: 3px;
+    overflow: hidden;
+    box-shadow: 0 12px 28px -16px rgba(0,0,0,0.5);
+    transition: transform 0.15s ease;
+  }
+  .media-card:hover{ transform: translateY(-3px); }
+  .media-card img{
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+    display: block;
+    background: #d8d2c2;
+  }
+  .media-card-body{
+    padding: 10px 12px;
+    display:flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .media-card-body .cap{
+    color: var(--navy-deep);
+    font-size: 0.82rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .media-del{
+    background: transparent;
+    border: 1px solid #c99;
+    color: #a03a3a;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    padding: 4px 8px;
+    border-radius: 2px;
+    cursor:pointer;
+    flex-shrink: 0;
+  }
+  .media-del:hover{ background: #a03a3a; color: #fff; }
 
--- ---------- MEDIA ----------
-create table if not exists media (
-  id bigint generated always as identity primary key,
-  url text,
-  caption text,
-  created_at timestamptz default now()
-);
+  /* ---------- Pagination ---------- */
+  .pagination{
+    display:flex; justify-content:center; align-items:center; gap: 8px;
+    margin-top: 18px; flex-wrap: wrap;
+  }
+  .pagination button{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    padding: 7px 12px;
+    border-radius: 2px;
+    cursor:pointer;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--paper-dim);
+  }
+  .pagination button.active{
+    border-color: var(--gold);
+    color: var(--gold-bright);
+  }
+  .pagination button:disabled{ opacity: 0.35; cursor: not-allowed; }
 
-alter table media enable row level security;
+  /* ---------- Bulletin ---------- */
+  .bulletin-post{
+    background: var(--paper);
+    color: var(--navy-deep);
+    border-radius: 3px;
+    padding: 18px 22px;
+    margin-bottom: 14px;
+    box-shadow: 0 12px 30px -18px rgba(0,0,0,0.5);
+  }
+  .bulletin-post .bp-head{
+    display:flex; justify-content:space-between; align-items:baseline; gap:10px;
+    margin-bottom: 8px; flex-wrap: wrap;
+  }
+  .bulletin-post .bp-title{ font-family:'Bebas Neue', sans-serif; font-size: 1.15rem; }
+  .bulletin-post .bp-meta{ font-family:'JetBrains Mono', monospace; font-size: 0.68rem; color: #7a725c; }
+  .bulletin-post .bp-content{ font-size: 0.92rem; color: #2c2a22; white-space: pre-wrap; }
 
-create policy "Ulogovani čitaju media" on media
-  for select to authenticated using (true);
+  /* ---------- BOLO ---------- */
+  .bolo-status-badge{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 3px 10px;
+    border-radius: 12px;
+    cursor: pointer;
+    border: 1px solid var(--redline);
+    color: var(--redline);
+  }
+  .bolo-status-badge.resolved{ border-color: var(--ok); color: var(--ok); }
 
-create policy "Admin uređuje media" on media
-  for all to authenticated using (
-    exists (select 1 from admin_permissions ap where ap.user_id = auth.uid() and ap.is_admin = true)
-  );
+  /* ---------- General UI polish ---------- */
+  .app-card, .media-card, .sheet-wrap, .sop-doc, .media-add-card{
+    transition: box-shadow 0.15s ease;
+  }
+  .app-card:hover{ box-shadow: 0 16px 36px -16px rgba(0,0,0,0.6); }
+  .btn-ghost{ transition: background 0.15s ease, transform 0.1s ease; }
+  .btn-ghost:active{ transform: translateY(1px); }
+  .tab-btn{ transition: color 0.15s ease, border-color 0.15s ease; }
+</style>
+</head>
+<body class="">
 
--- ---------- BOLO ----------
-create table if not exists bolo (
-  id bigint generated always as identity primary key,
-  subject text,
-  description text,
-  status text default 'Aktivan',
-  issued_by text,
-  created_at timestamptz default now()
-);
 
-alter table bolo enable row level security;
+  <div class="topstrip">
+    <span class="mono">OVERCAST RP</span>
+    <span class="mono">LSPD ADMIN PANEL</span>
+  </div>
 
-create policy "Ulogovani čitaju bolo" on bolo
-  for select to authenticated using (true);
+  <div id="loginScreen" style="display: none;">
+    <div class="login-card">
+      <div class="login-head">
+        <div class="badge-mini"><span>LS</span></div>
+        <h1>Admin pristup</h1>
+        <p>Samo ovlašćeno osoblje</p>
+      </div>
+      <div class="login-body">
+        <form id="loginForm">
+          <div class="field">
+            <label for="email">Email</label>
+            <input type="email" id="email" required="" autocomplete="username">
+          </div>
+          <div class="field">
+            <label for="password">Lozinka</label>
+            <input type="password" id="password" required="" autocomplete="current-password">
+          </div>
+          <button type="submit" class="login-btn" id="loginBtn">Prijavi se</button>
+          <div class="login-error" id="loginError">Invalid login credentials</div>
+        </form>
+      </div>
+    </div>
+  </div>
 
-create policy "Admin uređuje bolo" on bolo
-  for all to authenticated using (
-    exists (select 1 from admin_permissions ap where ap.user_id = auth.uid() and ap.is_admin = true)
-  );
+  <div id="dashboard" class="show">
+    <div class="dash-header">
+      <div>
+        <h1>LSPD Admin Panel</h1>
+        <div class="sub" id="userIdentity">test@overcast.pd<span class="view-only-badge">Samo pregled</span></div>
+      </div>
+      <div class="dash-actions">
+        <button class="btn-ghost" id="refreshBtn">Osvježi</button>
+        <button class="btn-ghost" id="logoutBtn">Odjavi se</button>
+      </div>
+    </div>
 
--- ---------- TRAINING (Trening/Akademija) ----------
-create table if not exists training (
-  id bigint generated always as identity primary key,
-  cadet_name text,
-  modules text,
-  status text default 'U toku',
-  created_at timestamptz default now()
-);
+    <div class="tab-nav">
+      <button class="tab-btn" data-tab="prijave" style="display: none;">Prijave</button>
+      <button class="tab-btn active" data-tab="sop">SOP</button>
+      <button class="tab-btn" data-tab="sheet">Sheet</button>
+      <button class="tab-btn" data-tab="bolo">BOLO</button>
+      <button class="tab-btn" data-tab="trening">Trening</button>
+      <button class="tab-btn" data-tab="bulletin">Bulletin</button>
+      <button class="tab-btn" data-tab="dutylog">Duty Log</button>
+      <button class="tab-btn" data-tab="media">Media</button>
+      <button class="tab-btn" data-tab="admin" style="display: none;">Postavke</button>
+    </div>
 
-alter table training enable row level security;
+    <div class="dash-body">
 
-create policy "Ulogovani čitaju training" on training
-  for select to authenticated using (true);
+      <div class="tab-panel" id="tab-prijave">
+        <div class="sheet-toolbar">
+          <div class="status-row" id="statusRow" style="margin:0;">Ukupno prijava: 1</div>
+          <select class="cert-add-select" id="appStatusFilter">
+            <option value="">Sve prijave</option>
+            <option value="Na čekanju">Na čekanju</option>
+            <option value="Prihvaćena">Prihvaćena</option>
+            <option value="Odbijena">Odbijena</option>
+          </select>
+        </div>
+        <div class="app-grid" id="appGrid"></div>
+        <div class="pagination" id="appPagination"></div>
+      </div>
 
-create policy "Admin uređuje training" on training
-  for all to authenticated using (
-    exists (select 1 from admin_permissions ap where ap.user_id = auth.uid() and ap.is_admin = true)
-  );
+      <div class="tab-panel active" id="tab-sop">
+        <div class="sop-doc" id="sopDoc">
+          <h2>LOS SANTOS POLICE DEPARTMENT</h2>
 
--- ---------- BULLETIN (objave) ----------
-create table if not exists bulletin (
-  id bigint generated always as identity primary key,
-  title text,
-  content text,
-  author text,
-  created_at timestamptz default now()
-);
+          <h2>1. Zaustavljanje vozila (Traffic Stop)</h2>
+          <ol>
+            <li>Policijski službenik je dužan da prvo prijavi traffic stop na radio odgovarajućim kodovima ili riječima.</li>
+            <li>Aktiviranjem svjetlosne i zvučne signalizacije izdaje se jasan nalog vozaču da se bezbjedno zaustavi.</li>
+            <li>Policijski službenik je dužan da provjeri tablice vozila tako što će, ukoliko je sam, javiti se na radio i odgovarajućim kodom ili riječima zatražiti provjeru registarskih tablica, ili ako je sa kolegom u patroli, u tom slučaju sve navedeno radi kolega odnosno suvozač.</li>
+            <li>Patrolno vozilo se pozicionira iza osumnjičenog vozila pod blagim uglom (vaš desni far treba biti usmjeren ka njegovom lijevom, pod blagim uglom) radi taktičke sigurnosti.</li>
+            <li>Službenik prilazi vozilu sa strane vozača, održavajući bezbjednu distancu. Ukoliko je u patroli sa još jednim službenikom, u tom slučaju sve navedeno izvodi on.</li>
+            <li>Predstavlja se brojem značke, imenom i prezimenom.</li>
+            <li>Dalji postupci zavise od utvrđenog činjeničnog stanja.</li>
+          </ol>
 
-alter table bulletin enable row level security;
+          <h2>2. Provjera identiteta lica</h2>
+          <ol start="8">
+            <li>Policijski službenik ima pravo da izvrši provjeru identiteta u skladu sa zakonom.</li>
+            <li>Lice se obavještava o razlogu provjere identiteta.</li>
+            <li>Od lica se zahtijeva validan lični dokument.</li>
+            <li>Podaci se provjeravaju kroz službene evidencije.</li>
+            <li>U slučaju nepravilnosti, preduzimaju se dalje zakonom propisane mjere.</li>
+            <li>Korišćenje fingerprint skenera ili privođenja lica u policijsku stanicu, ako situacija to zahtijeva.</li>
+          </ol>
 
-create policy "Ulogovani čitaju bulletin" on bulletin
-  for select to authenticated using (true);
+          <div class="note-box">
+            <b>Osnovana sumnja:</b> Sumnja da je lice počinilo ili će počiniti krivično djelo (bez pretresa i privođenja).<br><br>
+            <b>Probable Cause:</b> Materijalni dokazi (čaure, fotografije, oružje, DNA, predmeti, ostali generalni dokazi — dozvoljeno privođenje i pretres lica).
+          </div>
 
-create policy "Admin uređuje bulletin" on bulletin
-  for all to authenticated using (
-    exists (select 1 from admin_permissions ap where ap.user_id = auth.uid() and ap.is_admin = true)
-  );
+          <h2>3. Pretres lica</h2>
+          <ol start="14">
+            <li>Pretres lica se vrši kada postoji Probable Cause ili lice daje dozvolu za pretres.</li>
+            <li>Lice se upozorava da će biti izvršen pretres.</li>
+            <li>Pronađeni predmeti se privremeno oduzimaju i evidentiraju (ilegalne stvari se oduzimaju trajno).</li>
+            <li>Pretres se obavlja uz poštovanje dostojanstva lica.</li>
+          </ol>
 
--- ---------- DUTY_LOG ----------
-create table if not exists duty_log (
-  id bigint generated always as identity primary key,
-  officer text,
-  date date,
-  hours numeric,
-  note text,
-  created_at timestamptz default now()
-);
+          <h2>4. Hapšenje lica</h2>
+          <ol start="18">
+            <li>Hapšenje se sprovodi kada postoje zakonski osnovi.</li>
+            <li>Lice se jasno i glasno obavještava da je uhapšeno.</li>
+            <li>Primjena sredstava prinude mora biti srazmjerna otporu.</li>
+            <li>Licu se stavljaju lisice radi bezbjednosti.</li>
+            <li>Lice se transportuje u nadležnu policijsku stanicu.</li>
+          </ol>
 
-alter table duty_log enable row level security;
+          <h3>Mirandina prava</h3>
+          <p>Čitaju se osumnjičenom pri privođenju i lišenju slobode.</p>
+          <div class="quote-box">
+            "Imate pravo da se branite ćutanjem, sve što kažete može i biće upotrebljeno protiv vas, imate pravo na jedan telefonski poziv. Imate pravo na obrok i vodu. Da li ste razumjeli svoja prava?"
+          </div>
+          <p>Službenik je dužan da pita da li je lice razumjelo svoja prava. Ukoliko lice kaže da nije, službenik je dužan da pročita još samo jednom, nakon toga službenik više nije dužan da čita prava.</p>
 
-create policy "Ulogovani čitaju duty_log" on duty_log
-  for select to authenticated using (true);
+          <h2>5. Upotreba sile</h2>
+          <ol start="23">
+            <li>Upotreba sile dozvoljena je isključivo kao poslednje sredstvo.</li>
+            <li>Verbalne naredbe se uvijek koriste kao prvi nivo sile.</li>
+            <li>Nesmrtonosna sredstva koriste se kada verbalne naredbe nisu dovoljne.</li>
+            <li>Vatreno oružje se koristi samo kada postoji neposredna prijetnja po život.</li>
+            <li>Svaka upotreba sile mora biti opravdana i dokumentovana.</li>
+          </ol>
 
-create policy "Admin uređuje duty_log" on duty_log
-  for all to authenticated using (
-    exists (select 1 from admin_permissions ap where ap.user_id = auth.uid() and ap.is_admin = true)
-  );
+          <hr>
 
--- =========================================================
--- KRAJ. Sledeći koraci nakon pokretanja ove skripte:
--- 1. Authentication -> Users -> Add user -> unesi svoj email/lozinku
--- 2. Kopiraj njegov "User UID"
--- 3. Pokreni ovaj insert (zamijeni vrijednosti svojim):
---
--- insert into admin_permissions (user_id, email, fullname, rank, is_admin, is_super_admin, can_view_applications)
--- values ('OVDJE-TVOJ-USER-UID', 'tvoj@email.com', 'Tvoje Ime', 'High Command', true, true, true);
--- =========================================================
+          <h2>Pravilno procesuiranje lica u ćelije</h2>
+          <p>Kada lice uspješno bude lišeno slobode, ukoliko niste primarni ili niste inspektor ili neki veći čin, ne pretražujete lice bez dozvole, takođe ne oduzimate stvari.</p>
+          <div class="warn-box">
+            NAPOMENA — KADETI NE PREGLEDAVAJU LICA NITI ODUZIMAJU ISTA OD ISTIH. TAKOĐE, KADETI NEMAJU ŠTA DA TRAŽE U ĆELIJAMA!
+          </div>
+          <p>Stvari oduzima samo onaj i isključivo onaj koji će taj slučaj voditi i pisati reports o istom. Dakle, ukoliko vi niste primarni, dužni ste obavijestiti, ako ste kojim slučajem oduzeli bilo šta od osumnjičenog, zaduženog za taj slučaj.</p>
+          <p>Kada otvarate reports, gledajte da pišete čitko i razumljivo, u naslovu obavezno navedite datum, kao i tip reporta (pored naslova desno imate type). Potrudite se da tom slučaju dodate što više dokaza — fotografije, DNA, čaure ukoliko se pucalo itd. Postoji kamera sa kojom možete slikati i te slike dodavati na tablet kasnije radi boljih dokaza. Takođe, dužni ste da dodate svakog službenika koji je učestvovao u tom slučaju.</p>
+          <p>U prostoriji gdje su ćelije nalaze se ormarići za ostavljanje dokaza, odnosno to što pokupite od osumnjičenih. Da ne bi dolazilo do zabune, morate obratiti pažnju na broj reporta koji ste pisali, npr. #00012 označava da je 12. po redu napravljen slučaj, što znači da ćete sve stvari koje ste pokupili od osumnjičenih i njihovih vozila, u ovom slučaju, odložiti u ormarić broj 12. Dakle, dođete do ormarića, idete treće oko na njega i ukucate 12.</p>
+          <div class="warn-box">
+            Ko se ne bude pridržavao svega ovoga biće strogo sankcionisan, takođe ko bude iznosio stvari ili ih krao biće najstrože kažnjen!
+          </div>
+
+          <h2>Primjena sile — stepeni</h2>
+          <h3>I stepen — Prisustvo</h3>
+          <p>Odnosi se na situacije koje možete spriječiti samim vašim prisustvom.</p>
+          <h3>II stepen — Verbalna sila</h3>
+          <p>Verbalna sila predstavlja davanje verbalnih komandi i naređivanje licima, sa ciljem amortizacije same situacije ili efikasnog lišavanja slobode.</p>
+          <h3>III stepen — Gole ruke</h3>
+          <p>Službenik će pristupiti onesposobljavanju osumnjičenog golim rukama ili borilačkim vještinama, ako za tim postoje realne mogućnosti.</p>
+          <h3>IV stepen — Nesmrtonosna sila</h3>
+          <p>Nesmrtonosna sila primjenjuje se korišćenjem pendreka, tazera i primjenjuje se kada individualac bježi od nas ili na nas nasrne golim rukama.</p>
+          <h3>V stepen — Smrtonosna sila</h3>
+          <p>Smrtonosna sila podrazumijeva upotrebu vatrenog oružja. Ona se primjenjuje kada se službenik nađe u životnoj opasnosti.</p>
+
+          <div class="note-box">
+            NAPOMENA: Ukoliko lice bježi od vas sa oružjem u ruci, upozorićete lice da baci oružje minimum jednom. Ako odbije, imate pravo da zapucate na njega. Uvijek tretirate oružje kao da je napunjeno. Ne uperivati oružje u ono u šta ne namjeravate pucati. Budite sigurni u svoju metu i ono što je iza nje. Ukoliko je neposredno prije bilo pucano na policiju, policija ima pravo da uzvrati vatru.
+          </div>
+
+          <hr>
+
+          <h2>Pursuit pravila</h2>
+          <p>U toku potjere imamo tri najvažnije pozicije: primarni, sekundarni i tercijalni. Primarni je najčešće onaj koji je sazvao 10-80 (potjera u toku). Ukoliko on više nije u mogućnosti ili je u potjeri brže vozilo, onda preuzima primarni.</p>
+          <p>Preuzima se tako što se na radio traži dozvola za preuzimanje primarnog, i po odobravanju, čim se steknu uslovi za preuzimanje primarne pozicije, onaj koji preuzima naglašava npr. "Preuzimam primarnog sa lijeve strane". Tako svima u potjeri daje do znanja da prolazi sa njihove LIJEVE strane.</p>
+          <p>Odstojanje između vozila mora biti najmanje 5 metara radi bezbjednosti.</p>
+          <p>Službenici imaju pravo da prekinu potjeru uz dobar razlog (preopasno, rizik ili manjak jedinica).</p>
+
+          <h2>High risk pursuit (full agro)</h2>
+          <h3>1. Aktivacija režima</h3>
+          <p>Režim visokog rizika u potjeri proglašava nadležni komandni oficir ili najviši prisutni čin kada:</p>
+          <ol>
+            <li>Osumnjičeni koristi vatreno oružje iz vozila</li>
+            <li>Postoji potvrda da je lice teško naoružano</li>
+            <li>Osumnjičeni je izvršio nasilno krivično djelo</li>
+            <li>Potjera ugrožava veći broj civila</li>
+            <li>Standardne mjere nisu dale rezultat</li>
+          </ol>
+          <p>Bez formalne objave preko radija, režim se ne smatra aktivnim.</p>
+
+          <h3>2. Ograničenje jedinica</h3>
+          <p>Primjer standardne potjere: do 3 patrolne jedinice. Primjer režima visokog rizika: 5 patrolnih jedinica ili 4 patrolne jedinice plus Air-unit. Cilj je kontrola situacije, ne haotična jurnjava.</p>
+
+          <h3>3. PIT-Box manevar</h3>
+          <p><b>Standardni režim:</b> dozvoljen do 120 km/h, isključivo uz odobrenje nadređenog.</p>
+          <p><b>Režim visokog rizika:</b> granica ostaje ista 120 km/h, zabranjen u gusto naseljenim zonama osim ako prijetnja uključuje vatreno oružje. Izbjegavati "rocket league" u ovakvim situacijama jer postoje i drugi načini zaustavljanja vozila u kome je osumnjičeni. Izvodi se tako što kontrolisano udarate u zadnji bočni dio vozila.</p>
+
+          <h3>4. Ramovanje (taktičko guranje)</h3>
+          <p><b>Standard:</b> zabranjeno. <b>Visoki rizik:</b> dozvoljeno kontrolisano taktičko guranje pri brzinama do 50 km/h radi zaustavljanja vozila koje predstavlja smrtonosnu prijetnju. Namjerno izazivanje totalne nesreće nije dozvoljeno. Izvodi se tako što svojim vozilom udarate u osumnjičeno vozilo sa zadnje, prednje ili bočne strane.</p>
+
+          <h3>5. Spike trake</h3>
+          <p><b>Standard:</b> uz koordinaciju i najavu. <b>Visoki rizik:</b> dozvoljena brza implementacija bez prethodne verbalne najave osumnjičenom.</p>
+
+          <h3>6. Upotreba vatrenog oružja na vozilo</h3>
+          <p>Dozvoljena isključivo ako nadređeni da naredbu, i to u sljedećim situacijama: osumnjičeni puca na službenike ili civile, ili postoji neposredna opasnost po život. Pucanje radi "zaustavljanja potjere" bez realne prijetnje nije dozvoljeno.</p>
+
+          <h3>7. Obustava potjere</h3>
+          <p>Čak i u režimu visokog rizika, potjera se prekida ako: rizik po civile prevazilazi operativni cilj, osumnjičeni više ne predstavlja neposrednu prijetnju, ili nalog za obustavu izda komandni oficir.</p>
+
+          <hr>
+
+          <h2>Pravila kod PIT stopa i potjera</h2>
+          <p>PIT stop se smije raditi pod sljedećim uslovima:</p>
+          <ol>
+            <li>Da lice bježi duže od 15 minuta</li>
+            <li>Da lice nemarno vozi i pretjerano ugrožava živote civila i službenika</li>
+            <li>Ukoliko viši čin izda naredbu</li>
+            <li>Da vozilo ne prelazi brzinu od 120 km/h ili mp/h</li>
+            <li>Za PIT se mora tražiti dozvola prije započinjanja procedure</li>
+          </ol>
+
+          <h2>Pravila pri onfoot potjeri</h2>
+          <ol>
+            <li>Upotreba obaranja je prvi stepen sprečavanja lica da pobjegne od police dept. Ukoliko lice nije ugrožavalo živote drugih civila ili policajaca, nije narušavalo imovinu grada, dužni ste samo da koristite taktiku obaranja na pravilan način.</li>
+            <li>Drugi stepen je korišćenje tasera. Ukoliko lice ugrozi živote bez da je koristio vatreno oružje, a ugrozio je lica svojom vožnjom i slično, ili je fizički napao policajca, oborio ga na pod i sl., imate pravo tek tada za taser.</li>
+            <li>Treći stepen je upotreba vatrenog oružja, isključivo ukoliko lice ugrozi život službenika ili civila podizanjem svog vatrenog oružja.</li>
+          </ol>
+
+          <hr>
+
+          <h2>Pravilna upotreba MDT-a</h2>
+          <p>Prije svega, kada se prijavljujete na dužnost, prvo što radite je otvarate MDT (kucate MDT) i u donjem lijevom uglu ćete vidjeti vaše ime i prezime, a odmah pored kao malu olovčicu. Kada uđete, tu pri vrhu će vam biti Duty status koji trebate staviti na Duty on i u callsign upisati vaš broj značke.</p>
+          <p>Na main stranici imate Dashboard preko kojeg možete vidjeti više informacija, kao što je PD chat, prethodni incidenti, BOLOs, aktivne jedinice, kao i Bulletin board. Većinu navedenih stvari koriste i upravljaju veći činovi.</p>
+          <p>Odmah ispod imate Dispatch preko kojeg stižu dojave o raznim dešavanjima (pljačke, promet opojnih sredstava i sl.)</p>
+          <p>BOLOs takođe upravljaju veći činovi. Pišemo ga ako je sumnjiva osoba, osumnjičen za krivično djelo, pobjegao sa mjesta događaja, takođe se BOLOs izdaje i za vozilo viđeno u incidentu. Da se ne zbunite, BOLOs i WARRANT su dvije različite stvari! Preko BOLOs se ne izdaje POTJERNICA za hapšenje lica!</p>
+          <p><b>Citizens:</b> Ovdje pretražujete lica tako što upišete ime i prezime, takođe možete to izvršiti i na Main stranici u globalnom search-u.</p>
+          <p><b>Vehicles:</b> Pretraga vozila po tablicama.</p>
+          <p><b>Properties:</b> Nekretnine — ovo koriste samo viši činovi!</p>
+          <p><b>Weapons:</b> Pretraga oružja po serijskom broju, kao i vezivanje novog oružja serijskim brojem za bazu podataka.</p>
+          <p><b>Evidences:</b> Evidencija stvari, odnosno dokaza poput fotografije, DNA, fizičkih stvari i dr.</p>
+          <p><b>Incidents:</b> Ovo je ustvari nešto poput izvještaja sa terena, npr. "Više vozila je učestvovalo u saobraćajnoj nezgodi tu i tu".</p>
+          <p><b>Warrants:</b> Izdavanje potjernice za licem koje je počinilo neko teže krivično djelo. OVO RADE ISKLJUČIVO VIŠI ČINOVI!</p>
+          <p><b>Charges:</b> Ovdje možete pregledati kazne kako biste bili upućeni.</p>
+          <p><b>Reports:</b> Ovo služi za pisanje slučaja, npr. "Pljačka bankomata". Pišete tako što u naslovu stavite šta je u pitanju npr. "Pljačka bankomata" i datum, pored toga imate type u kojem označavate kakvo djelo je u pitanju. Na desnoj strani dodajete policajce koji su učestvovali, osumnjičene, civile odnosno žrtve, vozila, oružja, evidencije (oružja i evidencije za sada ne), možete linkovati neki incident koji je pisan a da je vezan za taj slučaj, takođe možete vezati izdatu potjernicu ako ste uhvatili lice sa iste, dodjeljujete tagove npr. Theft Robbery ili sl., i posljednje su fotografije poput mugshota osumnjičenog, slike sa mjesta zločina i sl.</p>
+          <p><b>Judgments:</b> Pisanje odgovarajuće novčane i zatvorske kazne — dodate osobu kojoj pišete kaznu, i onda ispod dodate odgovarajuću kaznu.</p>
+
+          <hr>
+
+          <h2>Upotreba vatrenog oružja</h2>
+          <p>Službenik ima pravo da upotrebi vatreno oružje onog momenta kada:</p>
+          <ol>
+            <li>Suspect/osumnjičeni ugrožava život policajca ili civila vatrenim oružjem</li>
+            <li>Ukoliko vi smatrate da osumnjičeni ima namjeru upotrijebiti oružje, ali samo kada je izvađeno oružje</li>
+          </ol>
+
+          <div class="warn-box">
+            SVAKI SLUŽBENIK JE DUŽAN da, kada vidi vozilo koje krši zakon u patroli, zaustavi ga — u suprotnom biće kažnjen. Svako vozilo koje krene da bježi, bar pokušajte ispratiti i započeti 10-80. U suprotnom, službenici će biti kažnjeni za kršenje radne obaveze.
+          </div>
+
+          <p>Ovaj dokument mora imati svaki službenik LSPD kao podsjetnik kako se službena dužnost obavlja na pravilan način. Pratite priručnik i radite po njemu, držite se okvira istog, i ne postoji šansa da budete krivično gonjeni niti da napravite grešku na poslu.</p>
+
+          <p class="sig">S poštovanjem: Assistant Chief, Cimbe Krosic</p>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-sheet">
+        <div class="sheet-toolbar">
+          <div class="status-row" id="rosterStatusRow" style="margin:0;">Ukupno članova: 1</div>
+          <button class="btn-add admin-only" id="addRosterBtn">+ Dodaj člana</button>
+        </div>
+        <div class="sheet-wrap">
+          <table class="sheet-table">
+            <thead>
+              <tr>
+                <th style="width:22%">Ime Prezime</th>
+                <th style="width:16%">Čin</th>
+                <th style="width:26%">Sertifikat</th>
+                <th style="width:22%">Kazne</th>
+                <th style="width:8%" class="admin-only"></th>
+              </tr>
+            </thead>
+            <tbody id="rosterBody"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="rosterPagination"></div>
+      </div>
+
+      <div class="tab-panel" id="tab-bolo">
+        <div class="sheet-toolbar">
+          <div class="status-row" id="boloStatusRow" style="margin:0;">Ukupno BOLO: 0</div>
+          <button class="btn-add admin-only" id="addBoloBtn">+ Novi BOLO</button>
+        </div>
+        <div class="media-add-card admin-only" id="boloAddCard" style="display:none;">
+          <div class="media-add-title">Novi BOLO</div>
+          <div class="media-add-row">
+            <input type="text" id="boloSubjectInput" placeholder="Lice / vozilo (npr. ime ili tablice)">
+            <input type="text" id="boloDescInput" placeholder="Opis / razlog izdavanja">
+            <button class="btn-add" id="saveBoloBtn">Sačuvaj</button>
+          </div>
+        </div>
+        <div class="app-grid" id="boloGrid"></div>
+      </div>
+
+      <div class="tab-panel" id="tab-trening">
+        <div class="sheet-toolbar">
+          <div class="status-row" id="treningStatusRow" style="margin:0;">Ukupno kadeta: 0</div>
+          <button class="btn-add admin-only" id="addTreningBtn">+ Dodaj kadeta</button>
+        </div>
+        <div class="sheet-wrap">
+          <table class="sheet-table">
+            <thead>
+              <tr>
+                <th style="width:22%">Kadet</th>
+                <th style="width:56%">Moduli obuke</th>
+                <th style="width:14%">Status</th>
+                <th style="width:8%" class="admin-only"></th>
+              </tr>
+            </thead>
+            <tbody id="treningBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-bulletin">
+        <div class="sheet-toolbar">
+          <div class="status-row" id="bulletinStatusRow" style="margin:0;">Ukupno objava: 0</div>
+        </div>
+        <div class="media-add-card admin-only" id="bulletinAddCard">
+          <div class="media-add-title">Nova objava</div>
+          <div class="media-add-row" style="flex-direction:column; align-items:stretch;">
+            <input type="text" id="bulletinTitleInput" placeholder="Naslov objave">
+            <textarea id="bulletinContentInput" placeholder="Tekst objave..." style="width:100%; min-height:80px; font-family:'Source Serif 4', serif; font-size:0.9rem; padding:10px 12px; border:1px solid #b8ae95; border-radius:2px; background:#fbf9f3; color:var(--navy-deep); resize:vertical;"></textarea>
+            <button class="btn-add" id="addBulletinBtn" style="align-self:flex-start;">+ Objavi</button>
+          </div>
+        </div>
+        <div id="bulletinList"></div>
+      </div>
+
+      <div class="tab-panel" id="tab-dutylog">
+        <div class="sheet-toolbar">
+          <div class="status-row" id="dutyStatusRow" style="margin:0;">Ukupno unosa: 0</div>
+          <button class="btn-add admin-only" id="addDutyBtn">+ Dodaj unos</button>
+        </div>
+        <div class="sheet-wrap">
+          <table class="sheet-table">
+            <thead>
+              <tr>
+                <th style="width:24%">Službenik</th>
+                <th style="width:16%">Datum</th>
+                <th style="width:14%">Sati</th>
+                <th style="width:38%">Napomena</th>
+                <th style="width:8%" class="admin-only"></th>
+              </tr>
+            </thead>
+            <tbody id="dutyBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-admin">
+        <div class="status-row" id="adminUsersStatusRow">Upravljanje korisnicima i dozvolama</div>
+        <div class="sheet-wrap">
+          <table class="sheet-table">
+            <thead>
+              <tr>
+                <th style="width:26%">Email / korisnik</th>
+                <th style="width:20%">Ime i čin</th>
+                <th style="width:15%">Admin (Sheet/Media/BOLO...)</th>
+                <th style="width:19%">Vidi Prijave</th>
+                <th style="width:20%">Super Admin (Postavke)</th>
+              </tr>
+            </thead>
+            <tbody id="adminUsersBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-media">
+        <div class="sheet-toolbar">
+          <div class="status-row" id="mediaStatusRow" style="margin:0;">Ukupno slika: 1</div>
+        </div>
+        <div class="media-add-card admin-only" id="mediaAddCard">
+          <div class="media-add-title">Dodaj novu sliku</div>
+          <div class="media-add-row">
+            <input type="url" id="mediaUrlInput" placeholder="https://... link ka slici">
+            <input type="text" id="mediaCaptionInput" placeholder="Opis (opciono)">
+            <button class="btn-add" id="addMediaBtn">+ Dodaj</button>
+          </div>
+        </div>
+        <div class="media-grid" id="mediaGrid"><div class="media-card" data-id="4"><img src="./LSPD Admin — Pregled prijava _ OverCast RP_files/5328377_5255971-dvijezastave-ls_ls.jpg" alt="" loading="lazy" onerror="this.style.opacity=0.3;"><div class="media-card-body"><div class="cap">CG</div><button class="media-del admin-only" data-action="del-media">×</button></div></div></div>
+      </div>
+
+    </div>
+  </div>
+
+<script>
+  const SUPABASE_URL = "https://rjusdokmtdnwvsuvxjow.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_-aKDZyBp1l5IRsGPmlGnsw_nPY_c827";
+
+  let accessToken = null;
+  let userEmail = null;
+  let isAdmin = false;
+  let rosterLoadedOnce = false;
+  let mediaLoadedOnce = false;
+  let boloLoadedOnce = false;
+  let treningLoadedOnce = false;
+  let bulletinLoadedOnce = false;
+  let dutyLoadedOnce = false;
+  let adminUsersLoadedOnce = false;
+  let isSuperAdmin = false;
+
+  const CERT_OPTIONS = ["Patrol Division","Traffic Enforcement","Detective Bureau","SWAT / Tactical","K9 Unit","Field Training Officer","Stop Sticks Certified","Solo Patrol Certified","Air Support Certified","High Speed Unit Certified","Moto Unit Certified","Rifle Certified","Spike Strips Certified"];
+  const STRIKE_OPTIONS = ["", "5 strike poena", "10 strike poena", "15 strike poena"];
+  const RANK_OPTIONS = ["High Command", "Command", "Detective", "Patrol Division"];
+  const APP_STATUS_OPTIONS = ["Na čekanju", "Prihvaćena", "Odbijena"];
+  const TRAINING_MODULES = ["Firearms Basics", "Traffic Stops", "Use of Force", "Pursuit Procedure", "Radio Codes", "Field Evaluation"];
+  const TRAINING_STATUS_OPTIONS = ["U toku", "Završeno", "Otpušten"];
+  const PAGE_SIZE = 10;
+  let rosterPage = 1;
+  let appPage = 1;
+  let rosterAllRows = [];
+  let appAllRows = [];
+
+  const loginScreen = document.getElementById('loginScreen');
+  const dashboard = document.getElementById('dashboard');
+  const loginForm = document.getElementById('loginForm');
+  const loginBtn = document.getElementById('loginBtn');
+  const loginError = document.getElementById('loginError');
+  const userIdentityEl = document.getElementById('userIdentity');
+  const statusRow = document.getElementById('statusRow');
+  const appGrid = document.getElementById('appGrid');
+
+  loginForm.addEventListener('submit', async function(e){
+    e.preventDefault();
+    loginError.classList.remove('show');
+    loginBtn.disabled = true;
+    loginBtn.textContent = 'Prijava u toku...';
+
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    try{
+      const res = await fetch(SUPABASE_URL + "/auth/v1/token?grant_type=password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_KEY
+        },
+        body: JSON.stringify({ email: email, password: password })
+      });
+
+      const data = await res.json();
+
+      if(!res.ok || !data.access_token){
+        throw new Error(data.error_description || data.msg || 'Pogrešan email ili lozinka.');
+      }
+
+      accessToken = data.access_token;
+      userEmail = email;
+
+      const userId = data.user && data.user.id;
+      const profile = await fetchMyProfile(userId);
+
+      isAdmin = profile.is_admin === true;
+      isSuperAdmin = profile.is_super_admin === true;
+      document.body.classList.toggle('is-admin', isAdmin);
+      document.querySelector('.tab-btn[data-tab="admin"]').style.display = isSuperAdmin ? '' : 'none';
+
+      if(profile.rank && profile.fullname){
+        userIdentityEl.innerHTML = esc(profile.rank) + ' ' + esc(profile.fullname)
+          + '<span class="view-only-badge">Samo pregled</span>';
+      } else {
+        userIdentityEl.innerHTML = esc(userEmail) + '<span class="view-only-badge">Samo pregled</span>';
+      }
+
+      loginScreen.style.display = 'none';
+      dashboard.classList.add('show');
+
+      const prijaveTabBtn = document.querySelector('.tab-btn[data-tab="prijave"]');
+      if(profile.can_view_applications){
+        prijaveTabBtn.style.display = '';
+        loadApplications();
+      } else {
+        prijaveTabBtn.style.display = 'none';
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        document.querySelector('.tab-btn[data-tab="sop"]').classList.add('active');
+        document.getElementById('tab-sop').classList.add('active');
+      }
+    } catch(err){
+      loginError.textContent = err.message || 'Greška pri prijavi. Pokušaj ponovo.';
+      loginError.classList.add('show');
+    } finally {
+      loginBtn.disabled = false;
+      loginBtn.textContent = 'Prijavi se';
+    }
+  });
+
+  async function fetchMyProfile(userId){
+    const fallback = { can_view_applications: false, is_admin: false, fullname: null, rank: null };
+    if(!userId) return fallback;
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/admin_permissions?user_id=eq." + userId + "&select=can_view_applications,is_admin,is_super_admin,fullname,rank", {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + accessToken }
+      });
+      if(!res.ok) return fallback;
+      const rows = await res.json();
+      return rows[0] || fallback;
+    } catch(err){
+      console.error('Greška pri provjeri dozvola:', err);
+      return fallback;
+    }
+  }
+
+  document.getElementById('logoutBtn').addEventListener('click', function(){
+    accessToken = null;
+    userEmail = null;
+    isAdmin = false;
+    isSuperAdmin = false;
+    rosterLoadedOnce = false; mediaLoadedOnce = false; boloLoadedOnce = false;
+    treningLoadedOnce = false; bulletinLoadedOnce = false; dutyLoadedOnce = false; adminUsersLoadedOnce = false;
+    document.body.classList.remove('is-admin');
+    dashboard.classList.remove('show');
+    loginScreen.style.display = 'flex';
+    loginForm.reset();
+    appGrid.innerHTML = '';
+    document.querySelector('.tab-btn[data-tab="prijave"]').style.display = '';
+    document.querySelector('.tab-btn[data-tab="admin"]').style.display = 'none';
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelector('.tab-btn[data-tab="prijave"]').classList.add('active');
+    document.getElementById('tab-prijave').classList.add('active');
+  });
+
+  document.getElementById('refreshBtn').addEventListener('click', function(){
+    const active = document.querySelector('.tab-btn.active').dataset.tab;
+    if(active === 'prijave') loadApplications();
+    if(active === 'sheet') loadRoster();
+    if(active === 'media') loadMedia();
+    if(active === 'bolo') loadBolo();
+    if(active === 'trening') loadTrening();
+    if(active === 'bulletin') loadBulletin();
+    if(active === 'dutylog') loadDutyLog();
+    if(active === 'admin') loadAdminUsers();
+  });
+
+  document.querySelectorAll('.tab-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+      if(btn.dataset.tab === 'sheet' && !rosterLoadedOnce){ loadRoster(); }
+      if(btn.dataset.tab === 'media' && !mediaLoadedOnce){ loadMedia(); }
+      if(btn.dataset.tab === 'bolo' && !boloLoadedOnce){ loadBolo(); }
+      if(btn.dataset.tab === 'trening' && !treningLoadedOnce){ loadTrening(); }
+      if(btn.dataset.tab === 'bulletin' && !bulletinLoadedOnce){ loadBulletin(); }
+      if(btn.dataset.tab === 'dutylog' && !dutyLoadedOnce){ loadDutyLog(); }
+      if(btn.dataset.tab === 'admin' && !adminUsersLoadedOnce){ loadAdminUsers(); }
+    });
+  });
+
+  function esc(str){
+    if(str === null || str === undefined) return '—';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function formatDate(iso){
+    if(!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleString('sr-Latn', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  }
+
+  function appStatusOptionsHtml(selected){
+    return APP_STATUS_OPTIONS.map(function(opt){
+      return '<option value="' + esc(opt) + '"' + ((selected || 'Na čekanju') === opt ? ' selected' : '') + '>' + esc(opt) + '</option>';
+    }).join('');
+  }
+
+  function appCardHtml(r){
+    const status = r.status || 'Na čekanju';
+    return '<div class="app-card" data-id="' + r.id + '">'
+      + '<div class="app-card-head">'
+        + '<div class="name">' + esc(r.fullname) + '</div>'
+        + '<div style="display:flex; align-items:center; gap:10px;">'
+          + '<div class="caseid">' + esc(r.case_id) + ' · ' + formatDate(r.created_at) + '</div>'
+          + '<select class="cert-add-select app-status-select admin-only" data-val="' + esc(status) + '">' + appStatusOptionsHtml(status) + '</select>'
+          + '<button class="row-del admin-only" data-action="del-app">Obriši</button>'
+        + '</div>'
+      + '</div>'
+      + '<div class="app-meta">'
+        + '<span><b>Discord:</b> ' + esc(r.discord) + '</span>'
+        + '<span><b>Kontakt:</b> ' + esc(r.contact) + '</span>'
+        + '<span><b>Godine:</b> ' + esc(r.age) + '</span>'
+        + '<span><b>Status:</b> ' + esc(status) + '</span>'
+      + '</div>'
+      + '<div class="app-field"><div class="lbl">Prethodno iskustvo</div><div class="val">' + esc(r.experience) + '</div></div>'
+      + '<div class="app-field"><div class="lbl">Motivacija</div><div class="val">' + esc(r.motivation) + '</div></div>'
+      + '<div class="app-field"><div class="lbl">Scenario odgovor</div><div class="val">' + esc(r.scenario) + '</div></div>'
+    + '</div>';
+  }
+
+  function renderAppPage(){
+    const filter = document.getElementById('appStatusFilter').value;
+    const filtered = filter ? appAllRows.filter(r => (r.status || 'Na čekanju') === filter) : appAllRows;
+
+    if(!filtered.length){
+      statusRow.textContent = 'Ukupno prijava: 0';
+      appGrid.innerHTML = '<div class="empty-state">Trenutno nema prijava koje odgovaraju filteru.</div>';
+      document.getElementById('appPagination').innerHTML = '';
+      return;
+    }
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    if(appPage > totalPages) appPage = totalPages;
+    const start = (appPage - 1) * PAGE_SIZE;
+    const pageRows = filtered.slice(start, start + PAGE_SIZE);
+
+    statusRow.textContent = 'Ukupno prijava: ' + filtered.length;
+    appGrid.innerHTML = pageRows.map(appCardHtml).join('');
+    renderPagination('appPagination', appPage, totalPages, function(p){ appPage = p; renderAppPage(); });
+  }
+
+  function renderPagination(containerId, current, totalPages, onChange){
+    const el = document.getElementById(containerId);
+    if(totalPages <= 1){ el.innerHTML = ''; return; }
+    let html = '<button data-p="' + (current - 1) + '"' + (current === 1 ? ' disabled' : '') + '>‹ Prev</button>';
+    for(let i = 1; i <= totalPages; i++){
+      html += '<button data-p="' + i + '" class="' + (i === current ? 'active' : '') + '">' + i + '</button>';
+    }
+    html += '<button data-p="' + (current + 1) + '"' + (current === totalPages ? ' disabled' : '') + '>Next ›</button>';
+    el.innerHTML = html;
+    el.querySelectorAll('button').forEach(function(btn){
+      btn.addEventListener('click', function(){ onChange(parseInt(btn.dataset.p, 10)); });
+    });
+  }
+
+  document.getElementById('appStatusFilter').addEventListener('change', function(){ appPage = 1; renderAppPage(); });
+
+  async function loadApplications(){
+    statusRow.textContent = 'Učitavanje prijava...';
+    appGrid.innerHTML = '';
+
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/applications?select=*&order=created_at.desc", {
+        headers: {
+          "apikey": SUPABASE_KEY,
+          "Authorization": "Bearer " + accessToken
+        }
+      });
+
+      if(!res.ok){
+        if(res.status === 401){
+          throw new Error('Sesija je istekla. Prijavi se ponovo.');
+        }
+        throw new Error('Greška pri učitavanju prijava (status ' + res.status + ').');
+      }
+
+      appAllRows = await res.json();
+      appPage = 1;
+      renderAppPage();
+    } catch(err){
+      statusRow.textContent = err.message || 'Greška pri učitavanju.';
+      console.error(err);
+    }
+  }
+
+  appGrid.addEventListener('change', async function(e){
+    if(!e.target.classList.contains('app-status-select')) return;
+    const card = e.target.closest('.app-card');
+    const id = card.dataset.id;
+    const val = e.target.value;
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/applications?id=eq." + id, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_KEY,
+          "Authorization": "Bearer " + accessToken,
+          "Prefer": "return=minimal"
+        },
+        body: JSON.stringify({ status: val })
+      });
+      if(!res.ok){ throw new Error('status ' + res.status); }
+      const row = appAllRows.find(r => String(r.id) === String(id));
+      if(row) row.status = val;
+    } catch(err){
+      console.error(err);
+      alert('Greška pri čuvanju statusa prijave.');
+    }
+  });
+
+  appGrid.addEventListener('click', async function(e){
+    if(e.target.dataset.action !== 'del-app') return;
+    const card = e.target.closest('.app-card');
+    const id = card.dataset.id;
+    if(!confirm('Trajno obrisati ovu prijavu?')) return;
+
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/applications?id=eq." + id, {
+        method: "DELETE",
+        headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + accessToken }
+      });
+      if(!res.ok){ throw new Error('status ' + res.status); }
+      appAllRows = appAllRows.filter(r => String(r.id) !== String(id));
+      renderAppPage();
+    } catch(err){
+      console.error(err);
+      alert('Greška pri brisanju prijave.');
+    }
+  });
+
+  /* ---------- Sheet (roster) ---------- */
+  const rosterBody = document.getElementById('rosterBody');
+  const rosterStatusRow = document.getElementById('rosterStatusRow');
+  const addRosterBtn = document.getElementById('addRosterBtn');
+
+  function certList(str){
+    return (str || '').split(',').map(s => s.trim()).filter(Boolean);
+  }
+
+  function certCellHtml(certStr){
+    const selList = certList(certStr);
+    const chips = selList.map(function(v){
+      return '<span class="cert-chip">' + esc(v) + '<button type="button" class="chip-remove admin-only" data-value="' + esc(v) + '">×</button></span>';
+    }).join('');
+    const remaining = CERT_OPTIONS.filter(o => !selList.includes(o));
+    const options = '<option value="">+ Dodaj sertifikat</option>' + remaining.map(function(opt){
+      return '<option value="' + esc(opt) + '">' + esc(opt) + '</option>';
+    }).join('');
+    return '<div class="cert-cell" data-certs="' + esc(selList.join(', ')) + '">'
+      + '<div class="cert-chips">' + chips + '</div>'
+      + '<select class="cert-add-select rf-cert-add admin-only">' + options + '</select>'
+      + '</div>';
+  }
+
+  function strikeOptionsHtml(selected){
+    return STRIKE_OPTIONS.map(function(opt){
+      const label = opt === '' ? '— Nema —' : opt;
+      const isSel = (selected || '') === opt;
+      return '<option value="' + esc(opt) + '"' + (isSel ? ' selected' : '') + '>' + esc(label) + '</option>';
+    }).join('');
+  }
+
+  function rankOptionsHtml(selected){
+    const placeholder = '<option value=""' + (!selected ? ' selected' : '') + '>— Izaberi čin —</option>';
+    const opts = RANK_OPTIONS.map(function(opt){
+      const isSel = (selected || '') === opt;
+      return '<option value="' + esc(opt) + '"' + (isSel ? ' selected' : '') + '>' + esc(opt) + '</option>';
+    }).join('');
+    return placeholder + opts;
+  }
+
+  function rankIndex(rank){
+    const i = RANK_OPTIONS.indexOf(rank || '');
+    return i === -1 ? RANK_OPTIONS.length : i;
+  }
+
+  function rosterRowHtml(r){
+    return '<tr data-id="' + r.id + '">'
+      + '<td><input type="text" class="rf-name" value="' + esc(r.fullname) + '" placeholder="Ime Prezime"></td>'
+      + '<td><select class="rf-rank">' + rankOptionsHtml(r.rank) + '</select></td>'
+      + '<td>' + certCellHtml(r.certificates) + '</td>'
+      + '<td><select class="strike-select rf-strike" data-val="' + esc(r.strikes || '') + '">' + strikeOptionsHtml(r.strikes) + '</select></td>'
+      + '<td class="admin-only"><button class="row-del" data-action="del">Ukloni</button></td>'
+      + '</tr>';
+  }
+
+  function renderRosterPage(){
+    if(!rosterAllRows.length){
+      rosterStatusRow.textContent = 'Ukupno članova: 0';
+      rosterBody.innerHTML = '';
+      document.getElementById('rosterPagination').innerHTML = '';
+      return;
+    }
+    const totalPages = Math.max(1, Math.ceil(rosterAllRows.length / PAGE_SIZE));
+    if(rosterPage > totalPages) rosterPage = totalPages;
+    const start = (rosterPage - 1) * PAGE_SIZE;
+    const pageRows = rosterAllRows.slice(start, start + PAGE_SIZE);
+
+    rosterStatusRow.textContent = 'Ukupno članova: ' + rosterAllRows.length;
+    rosterBody.innerHTML = pageRows.map(rosterRowHtml).join('');
+    renderPagination('rosterPagination', rosterPage, totalPages, function(p){ rosterPage = p; renderRosterPage(); });
+  }
+
+  async function loadRoster(){
+    rosterLoadedOnce = true;
+    rosterStatusRow.textContent = 'Učitavanje...';
+    rosterBody.innerHTML = '';
+
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/roster?select=*", {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + accessToken }
+      });
+      if(!res.ok){ throw new Error('Greška pri učitavanju tabele (status ' + res.status + ').'); }
+      const rows = await res.json();
+
+      rows.sort(function(a, b){
+        const ra = rankIndex(a.rank), rb = rankIndex(b.rank);
+        if(ra !== rb) return ra - rb;
+        return (a.fullname || '').localeCompare(b.fullname || '');
+      });
+
+      rosterAllRows = rows;
+      rosterPage = 1;
+      renderRosterPage();
+    } catch(err){
+      rosterStatusRow.textContent = err.message || 'Greška pri učitavanju.';
+      console.error(err);
+    }
+  }
+
+  async function patchRoster(id, field, value){
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/roster?id=eq." + id, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_KEY,
+          "Authorization": "Bearer " + accessToken,
+          "Prefer": "return=minimal"
+        },
+        body: JSON.stringify({ [field]: value })
+      });
+      if(!res.ok){ throw new Error('status ' + res.status); }
+    } catch(err){
+      console.error('Greška pri čuvanju izmjene:', err);
+      rosterStatusRow.textContent = 'Greška pri čuvanju izmjene — provjeri konekciju.';
+    }
+  }
+
+  addRosterBtn.addEventListener('click', async function(){
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/roster", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_KEY,
+          "Authorization": "Bearer " + accessToken,
+          "Prefer": "return=minimal"
+        },
+        body: JSON.stringify({ fullname: "", rank: "", certificates: "", strikes: "" })
+      });
+      if(!res.ok){ throw new Error('status ' + res.status); }
+      loadRoster();
+    } catch(err){
+      console.error(err);
+      rosterStatusRow.textContent = 'Greška pri dodavanju člana.';
+    }
+  });
+
+  rosterBody.addEventListener('change', function(e){
+    const row = e.target.closest('tr');
+    if(!row) return;
+    const id = row.dataset.id;
+
+    if(e.target.classList.contains('rf-name')){
+      patchRoster(id, 'fullname', e.target.value.trim());
+    } else if(e.target.classList.contains('rf-rank')){
+      patchRoster(id, 'rank', e.target.value).then(loadRoster);
+    } else if(e.target.classList.contains('rf-cert-add')){
+      const val = e.target.value;
+      if(!val) return;
+      const cell = e.target.closest('.cert-cell');
+      const current = certList(cell.dataset.certs);
+      if(!current.includes(val)) current.push(val);
+      const joined = current.join(', ');
+      cell.outerHTML = certCellHtml(joined);
+      patchRoster(id, 'certificates', joined);
+    } else if(e.target.classList.contains('rf-strike')){
+      e.target.dataset.val = e.target.value;
+      patchRoster(id, 'strikes', e.target.value);
+    }
+  });
+
+  rosterBody.addEventListener('click', async function(e){
+    if(e.target.classList.contains('chip-remove')){
+      const row = e.target.closest('tr');
+      const id = row.dataset.id;
+      const cell = e.target.closest('.cert-cell');
+      const remove = e.target.dataset.value;
+      const current = certList(cell.dataset.certs).filter(v => v !== remove);
+      const joined = current.join(', ');
+      cell.outerHTML = certCellHtml(joined);
+      patchRoster(id, 'certificates', joined);
+      return;
+    }
+
+    if(e.target.dataset.action !== 'del') return;
+    const row = e.target.closest('tr');
+    const id = row.dataset.id;
+    if(!confirm('Ukloniti ovog člana sa liste?')) return;
+
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/roster?id=eq." + id, {
+        method: "DELETE",
+        headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + accessToken }
+      });
+      if(!res.ok){ throw new Error('status ' + res.status); }
+      rosterAllRows = rosterAllRows.filter(r => String(r.id) !== String(id));
+      renderRosterPage();
+    } catch(err){
+      console.error(err);
+      alert('Greška pri uklanjanju.');
+    }
+  });
+
+  /* ---------- Media ---------- */
+  const mediaGrid = document.getElementById('mediaGrid');
+  const mediaStatusRow = document.getElementById('mediaStatusRow');
+  const addMediaBtn = document.getElementById('addMediaBtn');
+  const mediaUrlInput = document.getElementById('mediaUrlInput');
+  const mediaCaptionInput = document.getElementById('mediaCaptionInput');
+
+  function mediaCardHtml(m){
+    return '<div class="media-card" data-id="' + m.id + '">'
+      + '<img src="' + esc(m.url) + '" alt="" loading="lazy" onerror="this.style.opacity=0.3;">'
+      + '<div class="media-card-body">'
+        + '<div class="cap">' + esc(m.caption || 'Bez opisa') + '</div>'
+        + '<button class="media-del admin-only" data-action="del-media">×</button>'
+      + '</div>'
+    + '</div>';
+  }
+
+  async function loadMedia(){
+    mediaLoadedOnce = true;
+    mediaStatusRow.textContent = 'Učitavanje...';
+    mediaGrid.innerHTML = '';
+
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/media?select=*&order=created_at.desc", {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + accessToken }
+      });
+      if(!res.ok){ throw new Error('Greška pri učitavanju (status ' + res.status + ').'); }
+      const rows = await res.json();
+
+      mediaStatusRow.textContent = 'Ukupno slika: ' + rows.length;
+
+      if(!rows.length){
+        mediaGrid.innerHTML = '<div class="empty-state">Trenutno nema dodatih slika.</div>';
+        return;
+      }
+
+      mediaGrid.innerHTML = rows.map(mediaCardHtml).join('');
+    } catch(err){
+      mediaStatusRow.textContent = err.message || 'Greška pri učitavanju.';
+      console.error(err);
+    }
+  }
+
+  addMediaBtn.addEventListener('click', async function(){
+    const url = mediaUrlInput.value.trim();
+    const caption = mediaCaptionInput.value.trim();
+    if(!url){ alert('Unesi link ka slici.'); return; }
+
+    addMediaBtn.disabled = true;
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/media", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_KEY,
+          "Authorization": "Bearer " + accessToken,
+          "Prefer": "return=minimal"
+        },
+        body: JSON.stringify({ url: url, caption: caption })
+      });
+      if(!res.ok){ throw new Error('status ' + res.status); }
+      mediaUrlInput.value = '';
+      mediaCaptionInput.value = '';
+      loadMedia();
+    } catch(err){
+      console.error(err);
+      alert('Greška pri dodavanju slike.');
+    } finally {
+      addMediaBtn.disabled = false;
+    }
+  });
+
+  mediaGrid.addEventListener('click', async function(e){
+    if(e.target.dataset.action !== 'del-media') return;
+    const card = e.target.closest('.media-card');
+    const id = card.dataset.id;
+    if(!confirm('Ukloniti ovu sliku?')) return;
+
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/media?id=eq." + id, {
+        method: "DELETE",
+        headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + accessToken }
+      });
+      if(!res.ok){ throw new Error('status ' + res.status); }
+      card.remove();
+      mediaStatusRow.textContent = 'Ukupno slika: ' + mediaGrid.querySelectorAll('.media-card').length;
+    } catch(err){
+      console.error(err);
+      alert('Greška pri uklanjanju slike.');
+    }
+  });
+
+  /* ---------- BOLO ---------- */
+  const boloGrid = document.getElementById('boloGrid');
+  const boloStatusRow = document.getElementById('boloStatusRow');
+  const addBoloBtn = document.getElementById('addBoloBtn');
+  const boloAddCard = document.getElementById('boloAddCard');
+  const saveBoloBtn = document.getElementById('saveBoloBtn');
+
+  addBoloBtn.addEventListener('click', function(){
+    boloAddCard.style.display = boloAddCard.style.display === 'none' ? 'block' : 'none';
+  });
+
+  function boloCardHtml(b){
+    const resolved = b.status === 'Riješen';
+    return '<div class="app-card" data-id="' + b.id + '">'
+      + '<div class="app-card-head">'
+        + '<div class="name">' + esc(b.subject) + '</div>'
+        + '<div style="display:flex; align-items:center; gap:10px;">'
+          + '<div class="caseid">' + formatDate(b.created_at) + '</div>'
+          + '<span class="bolo-status-badge admin-only' + (resolved ? ' resolved' : '') + '" data-action="toggle-bolo">' + esc(b.status || 'Aktivan') + '</span>'
+          + '<button class="row-del admin-only" data-action="del-bolo">Obriši</button>'
+        + '</div>'
+      + '</div>'
+      + '<div class="app-field"><div class="lbl">Opis / razlog</div><div class="val">' + esc(b.description) + '</div></div>'
+      + (b.issued_by ? '<div class="app-field"><div class="lbl">Izdao</div><div class="val">' + esc(b.issued_by) + '</div></div>' : '')
+    + '</div>';
+  }
+
+  async function loadBolo(){
+    boloLoadedOnce = true;
+    boloStatusRow.textContent = 'Učitavanje...';
+    boloGrid.innerHTML = '';
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/bolo?select=*&order=created_at.desc", {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + accessToken }
+      });
+      if(!res.ok){ throw new Error('Greška pri učitavanju (status ' + res.status + ').'); }
+      const rows = await res.json();
+      boloStatusRow.textContent = 'Ukupno BOLO: ' + rows.length;
+      boloGrid.innerHTML = rows.length ? rows.map(boloCardHtml).join('') : '<div class="empty-state">Trenutno nema aktivnih BOLO obavještenja.</div>';
+    } catch(err){
+      boloStatusRow.textContent = err.message || 'Greška pri učitavanju.';
+      console.error(err);
+    }
+  }
+
+  saveBoloBtn.addEventListener('click', async function(){
+    const subject = document.getElementById('boloSubjectInput').value.trim();
+    const description = document.getElementById('boloDescInput').value.trim();
+    if(!subject){ alert('Unesi lice ili vozilo za BOLO.'); return; }
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/bolo", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_KEY,
+          "Authorization": "Bearer " + accessToken,
+          "Prefer": "return=minimal"
+        },
+        body: JSON.stringify({ subject: subject, description: description, status: 'Aktivan', issued_by: userEmail })
+      });
+      if(!res.ok){ throw new Error('status ' + res.status); }
+      document.getElementById('boloSubjectInput').value = '';
+      document.getElementById('boloDescInput').value = '';
+      boloAddCard.style.display = 'none';
+      loadBolo();
+    } catch(err){
+      console.error(err);
+      alert('Greška pri dodavanju BOLO.');
+    }
+  });
+
+  boloGrid.addEventListener('click', async function(e){
+    const card = e.target.closest('.app-card');
+    if(!card) return;
+    const id = card.dataset.id;
+
+    if(e.target.dataset.action === 'toggle-bolo'){
+      const newStatus = e.target.classList.contains('resolved') ? 'Aktivan' : 'Riješen';
+      try{
+        const res = await fetch(SUPABASE_URL + "/rest/v1/bolo?id=eq." + id, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": "Bearer " + accessToken, "Prefer": "return=minimal" },
+          body: JSON.stringify({ status: newStatus })
+        });
+        if(!res.ok){ throw new Error('status ' + res.status); }
+        loadBolo();
+      } catch(err){ console.error(err); alert('Greška pri izmjeni statusa.'); }
+      return;
+    }
+
+    if(e.target.dataset.action === 'del-bolo'){
+      if(!confirm('Ukloniti ovaj BOLO?')) return;
+      try{
+        const res = await fetch(SUPABASE_URL + "/rest/v1/bolo?id=eq." + id, {
+          method: "DELETE",
+          headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + accessToken }
+        });
+        if(!res.ok){ throw new Error('status ' + res.status); }
+        card.remove();
+        boloStatusRow.textContent = 'Ukupno BOLO: ' + boloGrid.querySelectorAll('.app-card').length;
+      } catch(err){ console.error(err); alert('Greška pri brisanju.'); }
+    }
+  });
+
+  /* ---------- Trening / Akademija ---------- */
+  const treningBody = document.getElementById('treningBody');
+  const treningStatusRow = document.getElementById('treningStatusRow');
+  const addTreningBtn = document.getElementById('addTreningBtn');
+
+  function treningModulesHtml(cadetId, completedStr){
+    const completed = (completedStr || '').split(',').map(s => s.trim()).filter(Boolean);
+    return TRAINING_MODULES.map(function(mod){
+      const checked = completed.includes(mod) ? ' checked' : '';
+      return '<label style="display:inline-flex; align-items:center; gap:5px; margin:2px 10px 2px 0; font-size:0.82rem;">'
+        + '<input type="checkbox" class="tr-module" data-module="' + esc(mod) + '"' + checked + '> ' + esc(mod) + '</label>';
+    }).join('');
+  }
+
+  function treningStatusOptionsHtml(selected){
+    return TRAINING_STATUS_OPTIONS.map(function(opt){
+      return '<option value="' + esc(opt) + '"' + ((selected || 'U toku') === opt ? ' selected' : '') + '>' + esc(opt) + '</option>';
+    }).join('');
+  }
+
+  function treningRowHtml(t){
+    return '<tr data-id="' + t.id + '" data-modules="' + esc(t.modules || '') + '">'
+      + '<td><input type="text" class="tr-name" value="' + esc(t.cadet_name) + '" placeholder="Ime kadeta"></td>'
+      + '<td>' + treningModulesHtml(t.id, t.modules) + '</td>'
+      + '<td><select class="tr-status">' + treningStatusOptionsHtml(t.status) + '</select></td>'
+      + '<td class="admin-only"><button class="row-del" data-action="del-trening">Ukloni</button></td>'
+      + '</tr>';
+  }
+
+  async function loadTrening(){
+    treningLoadedOnce = true;
+    treningStatusRow.textContent = 'Učitavanje...';
+    treningBody.innerHTML = '';
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/training?select=*", {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + accessToken }
+      });
+      if(!res.ok){ throw new Error('Greška pri učitavanju (status ' + res.status + ').'); }
+      const rows = await res.json();
+      treningStatusRow.textContent = 'Ukupno kadeta: ' + rows.length;
+      treningBody.innerHTML = rows.map(treningRowHtml).join('');
+    } catch(err){
+      treningStatusRow.textContent = err.message || 'Greška pri učitavanju.';
+      console.error(err);
+    }
+  }
+
+  async function patchTrening(id, field, value){
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/training?id=eq." + id, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": "Bearer " + accessToken, "Prefer": "return=minimal" },
+        body: JSON.stringify({ [field]: value })
+      });
+      if(!res.ok){ throw new Error('status ' + res.status); }
+    } catch(err){
+      console.error(err);
+      treningStatusRow.textContent = 'Greška pri čuvanju izmjene.';
+    }
+  }
+
+  addTreningBtn.addEventListener('click', async function(){
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/training", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": "Bearer " + accessToken, "Prefer": "return=minimal" },
+        body: JSON.stringify({ cadet_name: "", modules: "", status: "U toku" })
+      });
+      if(!res.ok){ throw new Error('status ' + res.status); }
+      loadTrening();
+    } catch(err){
+      console.error(err);
+      treningStatusRow.textContent = 'Greška pri dodavanju kadeta.';
+    }
+  });
+
+  treningBody.addEventListener('change', function(e){
+    const row = e.target.closest('tr');
+    if(!row) return;
+    const id = row.dataset.id;
+
+    if(e.target.classList.contains('tr-name')){
+      patchTrening(id, 'cadet_name', e.target.value.trim());
+    } else if(e.target.classList.contains('tr-status')){
+      patchTrening(id, 'status', e.target.value);
+    } else if(e.target.classList.contains('tr-module')){
+      const checks = row.querySelectorAll('.tr-module');
+      const completed = Array.from(checks).filter(c => c.checked).map(c => c.dataset.module);
+      const joined = completed.join(', ');
+      row.dataset.modules = joined;
+      patchTrening(id, 'modules', joined);
+    }
+  });
+
+  treningBody.addEventListener('click', async function(e){
+    if(e.target.dataset.action !== 'del-trening') return;
+    const row = e.target.closest('tr');
+    const id = row.dataset.id;
+    if(!confirm('Ukloniti ovog kadeta sa liste?')) return;
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/training?id=eq." + id, {
+        method: "DELETE",
+        headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + accessToken }
+      });
+      if(!res.ok){ throw new Error('status ' + res.status); }
+      row.remove();
+      treningStatusRow.textContent = 'Ukupno kadeta: ' + treningBody.querySelectorAll('tr').length;
+    } catch(err){
+      console.error(err);
+      alert('Greška pri uklanjanju.');
+    }
+  });
+
+  /* ---------- Bulletin board ---------- */
+  const bulletinList = document.getElementById('bulletinList');
+  const bulletinStatusRow = document.getElementById('bulletinStatusRow');
+  const addBulletinBtn = document.getElementById('addBulletinBtn');
+
+  function bulletinPostHtml(p){
+    return '<div class="bulletin-post" data-id="' + p.id + '">'
+      + '<div class="bp-head">'
+        + '<div class="bp-title">' + esc(p.title) + '</div>'
+        + '<div style="display:flex; align-items:center; gap:10px;">'
+          + '<div class="bp-meta">' + esc(p.author || '') + ' · ' + formatDate(p.created_at) + '</div>'
+          + '<button class="row-del admin-only" data-action="del-bulletin">Obriši</button>'
+        + '</div>'
+      + '</div>'
+      + '<div class="bp-content">' + esc(p.content) + '</div>'
+    + '</div>';
+  }
+
+  async function loadBulletin(){
+    bulletinLoadedOnce = true;
+    bulletinStatusRow.textContent = 'Učitavanje...';
+    bulletinList.innerHTML = '';
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/bulletin?select=*&order=created_at.desc", {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + accessToken }
+      });
+      if(!res.ok){ throw new Error('Greška pri učitavanju (status ' + res.status + ').'); }
+      const rows = await res.json();
+      bulletinStatusRow.textContent = 'Ukupno objava: ' + rows.length;
+      bulletinList.innerHTML = rows.length ? rows.map(bulletinPostHtml).join('') : '<div class="empty-state">Trenutno nema objava.</div>';
+    } catch(err){
+      bulletinStatusRow.textContent = err.message || 'Greška pri učitavanju.';
+      console.error(err);
+    }
+  }
+
+  addBulletinBtn.addEventListener('click', async function(){
+    const title = document.getElementById('bulletinTitleInput').value.trim();
+    const content = document.getElementById('bulletinContentInput').value.trim();
+    if(!title || !content){ alert('Unesi naslov i tekst objave.'); return; }
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/bulletin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": "Bearer " + accessToken, "Prefer": "return=minimal" },
+        body: JSON.stringify({ title: title, content: content, author: userEmail })
+      });
+      if(!res.ok){ throw new Error('status ' + res.status); }
+      document.getElementById('bulletinTitleInput').value = '';
+      document.getElementById('bulletinContentInput').value = '';
+      loadBulletin();
+    } catch(err){
+      console.error(err);
+      alert('Greška pri objavljivanju.');
+    }
+  });
+
+  bulletinList.addEventListener('click', async function(e){
+    if(e.target.dataset.action !== 'del-bulletin') return;
+    const post = e.target.closest('.bulletin-post');
+    const id = post.dataset.id;
+    if(!confirm('Obrisati ovu objavu?')) return;
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/bulletin?id=eq." + id, {
+        method: "DELETE",
+        headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + accessToken }
+      });
+      if(!res.ok){ throw new Error('status ' + res.status); }
+      post.remove();
+      bulletinStatusRow.textContent = 'Ukupno objava: ' + bulletinList.querySelectorAll('.bulletin-post').length;
+    } catch(err){
+      console.error(err);
+      alert('Greška pri brisanju objave.');
+    }
+  });
+
+  /* ---------- Duty log ---------- */
+  const dutyBody = document.getElementById('dutyBody');
+  const dutyStatusRow = document.getElementById('dutyStatusRow');
+  const addDutyBtn = document.getElementById('addDutyBtn');
+
+  function dutyRowHtml(d){
+    return '<tr data-id="' + d.id + '">'
+      + '<td><input type="text" class="dl-officer" value="' + esc(d.officer) + '" placeholder="Ime službenika"></td>'
+      + '<td><input type="date" class="dl-date" value="' + esc(d.date || '') + '"></td>'
+      + '<td><input type="number" step="0.5" min="0" class="dl-hours" value="' + esc(d.hours != null ? d.hours : '') + '" placeholder="0"></td>'
+      + '<td><input type="text" class="dl-note" value="' + esc(d.note || '') + '" placeholder="Napomena (opciono)"></td>'
+      + '<td class="admin-only"><button class="row-del" data-action="del-duty">Ukloni</button></td>'
+      + '</tr>';
+  }
+
+  async function loadDutyLog(){
+    dutyLoadedOnce = true;
+    dutyStatusRow.textContent = 'Učitavanje...';
+    dutyBody.innerHTML = '';
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/duty_log?select=*&order=date.desc", {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + accessToken }
+      });
+      if(!res.ok){ throw new Error('Greška pri učitavanju (status ' + res.status + ').'); }
+      const rows = await res.json();
+      dutyStatusRow.textContent = 'Ukupno unosa: ' + rows.length;
+      dutyBody.innerHTML = rows.map(dutyRowHtml).join('');
+    } catch(err){
+      dutyStatusRow.textContent = err.message || 'Greška pri učitavanju.';
+      console.error(err);
+    }
+  }
+
+  async function patchDuty(id, field, value){
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/duty_log?id=eq." + id, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": "Bearer " + accessToken, "Prefer": "return=minimal" },
+        body: JSON.stringify({ [field]: value })
+      });
+      if(!res.ok){ throw new Error('status ' + res.status); }
+    } catch(err){
+      console.error(err);
+      dutyStatusRow.textContent = 'Greška pri čuvanju izmjene.';
+    }
+  }
+
+  addDutyBtn.addEventListener('click', async function(){
+    try{
+      const today = new Date().toISOString().slice(0, 10);
+      const res = await fetch(SUPABASE_URL + "/rest/v1/duty_log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": "Bearer " + accessToken, "Prefer": "return=minimal" },
+        body: JSON.stringify({ officer: "", date: today, hours: 0, note: "" })
+      });
+      if(!res.ok){ throw new Error('status ' + res.status); }
+      loadDutyLog();
+    } catch(err){
+      console.error(err);
+      dutyStatusRow.textContent = 'Greška pri dodavanju unosa.';
+    }
+  });
+
+  dutyBody.addEventListener('change', function(e){
+    const row = e.target.closest('tr');
+    if(!row) return;
+    const id = row.dataset.id;
+    if(e.target.classList.contains('dl-officer')) patchDuty(id, 'officer', e.target.value.trim());
+    else if(e.target.classList.contains('dl-date')) patchDuty(id, 'date', e.target.value);
+    else if(e.target.classList.contains('dl-hours')) patchDuty(id, 'hours', parseFloat(e.target.value) || 0);
+    else if(e.target.classList.contains('dl-note')) patchDuty(id, 'note', e.target.value.trim());
+  });
+
+  dutyBody.addEventListener('click', async function(e){
+    if(e.target.dataset.action !== 'del-duty') return;
+    const row = e.target.closest('tr');
+    const id = row.dataset.id;
+    if(!confirm('Ukloniti ovaj unos?')) return;
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/duty_log?id=eq." + id, {
+        method: "DELETE",
+        headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + accessToken }
+      });
+      if(!res.ok){ throw new Error('status ' + res.status); }
+      row.remove();
+      dutyStatusRow.textContent = 'Ukupno unosa: ' + dutyBody.querySelectorAll('tr').length;
+    } catch(err){
+      console.error(err);
+      alert('Greška pri uklanjanju.');
+    }
+  });
+
+  /* ---------- Admin: korisnici i dozvole (samo super admin) ---------- */
+  const adminUsersBody = document.getElementById('adminUsersBody');
+  const adminUsersStatusRow = document.getElementById('adminUsersStatusRow');
+
+  function adminUserRowHtml(u){
+    const email = u.email || u.user_id;
+    return '<tr data-id="' + u.user_id + '">'
+      + '<td>' + esc(email) + '</td>'
+      + '<td><input type="text" class="au-name" value="' + esc((u.rank ? u.rank + ' ' : '') + (u.fullname || '')).trim() + '" disabled style="opacity:0.7;"></td>'
+      + '<td><input type="checkbox" class="au-admin"' + (u.is_admin ? ' checked' : '') + '></td>'
+      + '<td><input type="checkbox" class="au-apps"' + (u.can_view_applications ? ' checked' : '') + '></td>'
+      + '<td><input type="checkbox" class="au-super"' + (u.is_super_admin ? ' checked' : '') + '></td>'
+      + '</tr>';
+  }
+
+  async function loadAdminUsers(){
+    adminUsersLoadedOnce = true;
+    adminUsersStatusRow.textContent = 'Učitavanje korisnika...';
+    adminUsersBody.innerHTML = '';
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/admin_permissions?select=*", {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + accessToken }
+      });
+      if(!res.ok){ throw new Error('Greška pri učitavanju (status ' + res.status + ').'); }
+      const rows = await res.json();
+      adminUsersStatusRow.textContent = 'Ukupno korisnika: ' + rows.length;
+      adminUsersBody.innerHTML = rows.map(adminUserRowHtml).join('');
+    } catch(err){
+      adminUsersStatusRow.textContent = err.message || 'Greška pri učitavanju.';
+      console.error(err);
+    }
+  }
+
+  adminUsersBody.addEventListener('change', async function(e){
+    const row = e.target.closest('tr');
+    if(!row) return;
+    const userId = row.dataset.id;
+    let field = null, value = null;
+    if(e.target.classList.contains('au-admin')){ field = 'is_admin'; value = e.target.checked; }
+    else if(e.target.classList.contains('au-apps')){ field = 'can_view_applications'; value = e.target.checked; }
+    else if(e.target.classList.contains('au-super')){ field = 'is_super_admin'; value = e.target.checked; }
+    if(!field) return;
+
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/admin_permissions?user_id=eq." + userId, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": "Bearer " + accessToken, "Prefer": "return=minimal" },
+        body: JSON.stringify({ [field]: value })
+      });
+      if(!res.ok){ throw new Error('status ' + res.status); }
+    } catch(err){
+      console.error(err);
+      alert('Greška pri čuvanju dozvole — provjeri konekciju.');
+      e.target.checked = !value;
+    }
+  });
+
+</script>
+
+
+
+</body></html>
