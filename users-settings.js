@@ -1,11 +1,9 @@
 /* OverCast RP — Settings / Users bridge
-   The existing index.html already has the users table and its loadAdminUsers().
-   We only replace the READ of admin_permissions with the secure list-users
-   Edge Function. PATCH requests still go directly to admin_permissions. */
+   Loads ALL registered users from public.users.
+   It keeps the existing index.html/login flow untouched. */
 (function () {
   const SUPABASE_URL = 'https://rjusdokmtdnwvsuvxjow.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_-aKDZyBp1l5IRsGPmlGnsw_nPY_c827';
-  const FUNCTION_URL = SUPABASE_URL + '/functions/v1/list-users';
   const originalFetch = window.fetch.bind(window);
 
   function getUrl(input) {
@@ -26,44 +24,56 @@
     return headers.get('Authorization') || '';
   }
 
-  async function loadAllUsers(input, init) {
-    const authorization = getAuthHeader(input, init);
-    if (!authorization) {
-      throw new Error('Nema aktivne administratorske sesije.');
-    }
-
-    const res = await originalFetch(FUNCTION_URL, {
-      method: 'POST',
+  async function getJson(path, authorization) {
+    const res = await originalFetch(SUPABASE_URL + path, {
       headers: {
-        'Content-Type': 'application/json',
         'apikey': SUPABASE_KEY,
         'Authorization': authorization
-      },
-      body: '{}'
+      }
     });
-
-    const data = await res.json().catch(function () { return {}; });
+    const data = await res.json().catch(function () { return []; });
     if (!res.ok) {
-      throw new Error(data.error || ('Greška pri učitavanju korisnika (status ' + res.status + ').'));
+      throw new Error('Supabase ' + res.status + ': ' + (data.message || data.error || 'Greška pri učitavanju'));
     }
+    return data;
+  }
 
-    return (data.users || []).map(function (u) {
+  async function loadAllUsers(input, init) {
+    const authorization = getAuthHeader(input, init);
+    if (!authorization) throw new Error('Nema aktivne administratorske sesije.');
+
+    const [users, permissions, applications] = await Promise.all([
+      getJson('/rest/v1/users?select=id,email,created_at&order=created_at.desc', authorization),
+      getJson('/rest/v1/admin_permissions?select=user_id,is_admin,is_super_admin,can_view_applications', authorization),
+      getJson('/rest/v1/applications?select=user_id,fullname,discord,case_id,status', authorization)
+    ]);
+
+    const permissionMap = {};
+    (permissions || []).forEach(function (p) { permissionMap[p.user_id] = p; });
+
+    const applicationMap = {};
+    (applications || []).forEach(function (a) { applicationMap[a.user_id] = a; });
+
+    return (users || []).map(function (u) {
+      const p = permissionMap[u.id] || {};
+      const a = applicationMap[u.id] || {};
       return {
         id: u.id,
         user_id: u.id,
         email: u.email || '',
-        fullname: u.fullname || '',
-        discord: u.discord || '',
-        case_id: u.case_id || '',
-        status: u.status || 'Nema prijave',
+        fullname: a.fullname || '',
+        discord: a.discord || '',
+        case_id: a.case_id || '',
+        status: a.status || 'Nema prijave',
         created_at: u.created_at || null,
-        is_admin: !!u.is_admin,
-        is_super_admin: !!u.is_super_admin,
-        can_view_applications: !!u.can_view_applications
+        is_admin: !!p.is_admin,
+        is_super_admin: !!p.is_super_admin,
+        can_view_applications: !!p.can_view_applications
       };
     });
   }
 
+  // Existing index.html still asks for admin_permissions. Replace only that READ.
   window.fetch = async function (input, init) {
     if (isUsersRead(input, init)) {
       try {
@@ -80,7 +90,6 @@
         });
       }
     }
-
     return originalFetch(input, init);
   };
 })();
