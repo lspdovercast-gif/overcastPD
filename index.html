@@ -50,6 +50,13 @@
     justify-content:center;
     padding: 24px;
   }
+  #applyScreen{
+    min-height: calc(100vh - 40px);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding: 24px;
+  }
   .login-card{
     width: 100%;
     max-width: 380px;
@@ -643,6 +650,52 @@
     <span class="mono">LSPD ADMIN PANEL</span>
   </div>
 
+  <div id="applyScreen" style="display: flex;">
+    <div class="login-card" style="max-width: 480px;">
+      <div class="login-head">
+        <div class="badge-mini"><span>LS</span></div>
+        <h1>Prijava za LSPD</h1>
+        <p>Popuni formular ispod da se prijaviš</p>
+      </div>
+      <div class="login-body" id="applyBody">
+        <form id="applyForm">
+          <div class="field">
+            <label for="applyName">Ime i prezime</label>
+            <input type="text" id="applyName" required="">
+          </div>
+          <div class="field">
+            <label for="applyDiscord">Discord nick</label>
+            <input type="text" id="applyDiscord" required="">
+          </div>
+          <div class="field">
+            <label for="applyAge">Godine</label>
+            <input type="number" min="1" id="applyAge" required="">
+          </div>
+          <div class="field">
+            <label for="applyGoal">Cilj</label>
+            <input type="text" id="applyGoal" required="">
+          </div>
+          <div class="field">
+            <label for="applyExperience">Prethodna radna iskustva</label>
+            <textarea id="applyExperience" rows="3" style="width:100%; font-family:'Source Serif 4', serif; font-size:0.98rem; padding:11px 12px; border:1px solid #b8ae95; border-radius:2px; background:#fbf9f3; color:var(--navy-deep); resize:vertical;"></textarea>
+          </div>
+          <div class="field">
+            <label for="applyMotivation">Zašto želite da se pridružite LSPD-u?</label>
+            <textarea id="applyMotivation" rows="4" required="" style="width:100%; font-family:'Source Serif 4', serif; font-size:0.98rem; padding:11px 12px; border:1px solid #b8ae95; border-radius:2px; background:#fbf9f3; color:var(--navy-deep); resize:vertical;"></textarea>
+          </div>
+          <button type="submit" class="login-btn" id="applyBtn">Pošalji prijavu</button>
+          <div class="login-error" id="applyError">Greška pri slanju prijave.</div>
+        </form>
+        <p style="text-align:center; margin-top:16px; font-family:'JetBrains Mono', monospace; font-size:0.72rem;">
+          <a href="#" id="showLoginLink" style="color: var(--steel);">Već si u LSPD-u? Prijavi se</a>
+        </p>
+      </div>
+      <div class="login-body" id="applySuccess" style="display:none; text-align:center;">
+        <p style="font-size:1rem; color:#2c2a22;">Hvala! Razmotrićemo tvoju prijavu u najkraćem mogućem roku.</p>
+      </div>
+    </div>
+  </div>
+
   <div id="loginScreen" style="display: none;">
     <div class="login-card">
       <div class="login-head">
@@ -663,11 +716,14 @@
           <button type="submit" class="login-btn" id="loginBtn">Prijavi se</button>
           <div class="login-error" id="loginError">Invalid login credentials</div>
         </form>
+        <p style="text-align:center; margin-top:16px; font-family:'JetBrains Mono', monospace; font-size:0.72rem;">
+          <a href="#" id="backToApplyLink" style="color: var(--steel);">Nisi u LSPD-u? Popuni prijavu</a>
+        </p>
       </div>
     </div>
   </div>
 
-  <div id="dashboard" class="show">
+  <div id="dashboard" class="">
     <div class="dash-header">
       <div>
         <h1>LSPD Admin Panel</h1>
@@ -1054,6 +1110,7 @@
   let appAllRows = [];
 
   const loginScreen = document.getElementById('loginScreen');
+  const applyScreen = document.getElementById('applyScreen');
   const dashboard = document.getElementById('dashboard');
   const loginForm = document.getElementById('loginForm');
   const loginBtn = document.getElementById('loginBtn');
@@ -1061,6 +1118,74 @@
   const userIdentityEl = document.getElementById('userIdentity');
   const statusRow = document.getElementById('statusRow');
   const appGrid = document.getElementById('appGrid');
+
+  const applyForm = document.getElementById('applyForm');
+  const applyBtn = document.getElementById('applyBtn');
+  const applyError = document.getElementById('applyError');
+  const applyBody = document.getElementById('applyBody');
+  const applySuccess = document.getElementById('applySuccess');
+
+  document.getElementById('showLoginLink').addEventListener('click', function(e){
+    e.preventDefault();
+    applyScreen.style.display = 'none';
+    loginScreen.style.display = 'flex';
+  });
+
+  document.getElementById('backToApplyLink').addEventListener('click', function(e){
+    e.preventDefault();
+    loginScreen.style.display = 'none';
+    applyScreen.style.display = 'flex';
+  });
+
+  applyForm.addEventListener('submit', async function(e){
+    e.preventDefault();
+    applyError.classList.remove('show');
+    applyBtn.disabled = true;
+    applyBtn.textContent = 'Slanje u toku...';
+
+    const fullname = document.getElementById('applyName').value.trim();
+    const discord = document.getElementById('applyDiscord').value.trim();
+    const age = document.getElementById('applyAge').value.trim();
+    const goal = document.getElementById('applyGoal').value.trim();
+    const experience = document.getElementById('applyExperience').value.trim();
+    const motivation = document.getElementById('applyMotivation').value.trim();
+    const caseId = 'APP-' + Date.now().toString().slice(-6);
+
+    try{
+      const res = await fetch(SUPABASE_URL + "/rest/v1/applications", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_KEY,
+          "Authorization": "Bearer " + SUPABASE_KEY,
+          "Prefer": "return=minimal"
+        },
+        body: JSON.stringify({
+          case_id: caseId,
+          fullname: fullname,
+          discord: discord,
+          contact: discord,
+          age: age,
+          goal: goal,
+          experience: experience,
+          motivation: motivation,
+          scenario: motivation,
+          status: 'Na čekanju'
+        })
+      });
+      if(!res.ok){ throw new Error('status ' + res.status); }
+
+      applyBody.style.display = 'none';
+      applySuccess.style.display = 'block';
+    } catch(err){
+      console.error(err);
+      applyError.textContent = 'Greška pri slanju prijave. Pokušaj ponovo.';
+      applyError.classList.add('show');
+    } finally {
+      applyBtn.disabled = false;
+      applyBtn.textContent = 'Pošalji prijavu';
+    }
+  });
 
   loginForm.addEventListener('submit', async function(e){
     e.preventDefault();
@@ -1229,6 +1354,7 @@
         + '<span><b>Status:</b> ' + esc(status) + '</span>'
       + '</div>'
       + '<div class="app-field"><div class="lbl">Prethodno iskustvo</div><div class="val">' + esc(r.experience) + '</div></div>'
+      + '<div class="app-field"><div class="lbl">Cilj</div><div class="val">' + esc(r.goal) + '</div></div>'
       + '<div class="app-field"><div class="lbl">Motivacija</div><div class="val">' + esc(r.motivation) + '</div></div>'
       + '<div class="app-field"><div class="lbl">Scenario odgovor</div><div class="val">' + esc(r.scenario) + '</div></div>'
     + '</div>';
