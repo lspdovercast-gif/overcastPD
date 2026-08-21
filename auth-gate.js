@@ -10,142 +10,61 @@
   const nativeFetch = window.fetch.bind(window);
 
   async function authRequest(path, body) {
-    const r = await nativeFetch(AUTH + path, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY },
-      body: JSON.stringify(body)
-    });
-    const data = await r.json().catch(() => ({}));
-    return { r, data };
+    const r = await nativeFetch(AUTH + path, { method:'POST', headers:{'Content-Type':'application/json',apikey:SUPABASE_KEY}, body:JSON.stringify(body) });
+    const data = await r.json().catch(()=>({}));
+    return {r,data};
   }
-
   async function getApplication(userId, token) {
-    const r = await nativeFetch(
-      REST + '/applications?user_id=eq.' + encodeURIComponent(userId) + '&select=id,status&limit=1',
-      { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + token } }
-    );
-    if (!r.ok) return null;
-    const rows = await r.json().catch(() => []);
-    return rows[0] || null;
+    const r=await nativeFetch(REST+'/applications?user_id=eq.'+encodeURIComponent(userId)+'&select=id,status&limit=1',{headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+token}});
+    if(!r.ok)return null; const rows=await r.json().catch(()=>[]); return rows[0]||null;
   }
-
-  async function createOrLogin(email, password) {
-    const signup = await authRequest('/signup', { email, password });
-    if (signup.r.ok && signup.data.user) {
-      if (!signup.data.access_token) {
-        throw new Error('Nalog je napravljen. Potvrdi email pa se prijavi.');
-      }
+  async function createOrLogin(email,password){
+    const signup=await authRequest('/signup',{email,password});
+    if(signup.r.ok&&signup.data.user){
+      if(!signup.data.access_token)throw new Error('Nalog je napravljen. Potvrdi email pa se prijavi.');
       return signup.data;
     }
-
-    if (signup.r.status === 429) {
-      throw new Error('Supabase je privremeno ograničio nove naloge. Sačekaj nekoliko minuta i pokušaj ponovo.');
-    }
-
-    const msg = signup.data.error_description || signup.data.msg || signup.data.message || '';
-    if (/already registered|already exists|user exists|registered/i.test(msg)) {
-      const login = await authRequest('/token?grant_type=password', { email, password });
-      if (!login.r.ok || !login.data.access_token) {
-        throw new Error(login.data.error_description || login.data.msg || 'Postojeći nalog nije moguće prijaviti.');
-      }
+    if(signup.r.status===429)throw new Error('Supabase je privremeno ograničio nove naloge. Sačekaj nekoliko minuta i pokušaj ponovo.');
+    const msg=signup.data.error_description||signup.data.msg||signup.data.message||'';
+    if(/already registered|already exists|user exists|registered/i.test(msg)){
+      const login=await authRequest('/token?grant_type=password',{email,password});
+      if(!login.r.ok||!login.data.access_token)throw new Error(login.data.error_description||login.data.msg||'Postojeći nalog nije moguće prijaviti.');
       return login.data;
     }
-    throw new Error(msg || ('Supabase signup greška (status ' + signup.r.status + ').'));
+    throw new Error(msg||('Supabase signup greška (status '+signup.r.status+').'));
+  }
+  function showApplyError(message){const el=document.getElementById('applyError');if(el){el.textContent=message;el.classList.add('show');}}
+  function installApplicationHandler(){
+    const form=document.getElementById('applyForm');if(!form)return;
+    form.addEventListener('submit',async function(e){
+      e.preventDefault();e.stopImmediatePropagation();
+      const btn=document.getElementById('applyBtn'),body=document.getElementById('applyBody'),success=document.getElementById('applySuccess');
+      if(btn){btn.disabled=true;btn.textContent='Slanje u toku...';}
+      const fullname=document.getElementById('applyName')?.value.trim()||'',discord=document.getElementById('applyDiscord')?.value.trim()||'',age=document.getElementById('applyAge')?.value.trim()||'',goal=document.getElementById('applyGoal')?.value.trim()||'',experience=document.getElementById('applyExperience')?.value.trim()||'',motivation=document.getElementById('applyMotivation')?.value.trim()||'';
+      const email=window.prompt('Unesi email za nalog:');
+      if(!email){if(btn){btn.disabled=false;btn.textContent='Pošalji prijavu';}return;}
+      const password=window.prompt('Unesi lozinku (minimum 6 znakova):');
+      if(!password||password.length<6){showApplyError('Lozinka mora imati najmanje 6 znakova.');if(btn){btn.disabled=false;btn.textContent='Pošalji prijavu';}return;}
+      try{
+        const auth=await createOrLogin(email.trim().toLowerCase(),password);
+        const res=await nativeFetch(REST+'/applications',{method:'POST',headers:{'Content-Type':'application/json',apikey:SUPABASE_KEY,Authorization:'Bearer '+auth.access_token,Prefer:'return=minimal'},body:JSON.stringify({user_id:auth.user.id,case_id:'APP-'+Date.now().toString().slice(-6),fullname,discord,contact:discord,age,goal,experience,motivation,scenario:motivation,status:'Na čekanju'})});
+        if(!res.ok){const detail=await res.text().catch(()=> '');console.error('Application insert:',res.status,detail);throw new Error('Greška pri čuvanju prijave (status '+res.status+').');}
+        if(body)body.style.display='none';if(success){success.style.display='block';const p=success.querySelector('p');if(p)p.textContent='Prijava je uspješno poslata. Status: Na čekanju. Kada bude prihvaćena, moći ćeš se prijaviti u LSPD panel.';}
+      }catch(err){console.error(err);showApplyError(err.message||'Greška pri slanju prijave.');}
+      finally{if(btn){btn.disabled=false;btn.textContent='Pošalji prijavu';}}
+    },true);
+  }
+  window.OvercastAuthGate={getApplication,createOrLogin,checkAccess:async function(){const token=localStorage.getItem('overcast_access_token');if(!token)return{loggedIn:false,allowed:false};const r=await nativeFetch(AUTH+'/user',{headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+token}});if(!r.ok)return{loggedIn:false,allowed:false};const user=await r.json(),application=await getApplication(user.id,token);return{loggedIn:true,allowed:!!(application&&application.status==='Prihvaćena'),user,application};}};
+
+  // Load the Settings users module without changing the existing index.html/login flow.
+  function loadUsersModule(){
+    if(document.querySelector('script[data-overcast-users]'))return;
+    const s=document.createElement('script');
+    s.src='./users-settings.js';
+    s.dataset.overcastUsers='1';
+    s.defer=true;
+    document.head.appendChild(s);
   }
 
-  function showApplyError(message) {
-    const el = document.getElementById('applyError');
-    if (el) {
-      el.textContent = message;
-      el.classList.add('show');
-    }
-  }
-
-  function installApplicationHandler() {
-    const form = document.getElementById('applyForm');
-    if (!form) return;
-
-    // Only handle the application form. Login is intentionally untouched.
-    form.addEventListener('submit', async function (e) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-
-      const btn = document.getElementById('applyBtn');
-      const body = document.getElementById('applyBody');
-      const success = document.getElementById('applySuccess');
-      if (btn) { btn.disabled = true; btn.textContent = 'Slanje u toku...'; }
-
-      const fullname = document.getElementById('applyName')?.value.trim() || '';
-      const discord = document.getElementById('applyDiscord')?.value.trim() || '';
-      const age = document.getElementById('applyAge')?.value.trim() || '';
-      const goal = document.getElementById('applyGoal')?.value.trim() || '';
-      const experience = document.getElementById('applyExperience')?.value.trim() || '';
-      const motivation = document.getElementById('applyMotivation')?.value.trim() || '';
-
-      const email = window.prompt('Unesi email za nalog:');
-      if (!email) { if (btn) { btn.disabled = false; btn.textContent = 'Pošalji prijavu'; } return; }
-      const password = window.prompt('Unesi lozinku (minimum 6 znakova):');
-      if (!password || password.length < 6) {
-        showApplyError('Lozinka mora imati najmanje 6 znakova.');
-        if (btn) { btn.disabled = false; btn.textContent = 'Pošalji prijavu'; }
-        return;
-      }
-
-      try {
-        const auth = await createOrLogin(email.trim().toLowerCase(), password);
-        const res = await nativeFetch(REST + '/applications', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: SUPABASE_KEY,
-            Authorization: 'Bearer ' + auth.access_token,
-            Prefer: 'return=minimal'
-          },
-          body: JSON.stringify({
-            user_id: auth.user.id,
-            case_id: 'APP-' + Date.now().toString().slice(-6),
-            fullname, discord, contact: discord, age, goal,
-            experience, motivation, scenario: motivation,
-            status: 'Na čekanju'
-          })
-        });
-        if (!res.ok) {
-          const detail = await res.text().catch(() => '');
-          console.error('Application insert:', res.status, detail);
-          throw new Error('Greška pri čuvanju prijave (status ' + res.status + ').');
-        }
-
-        // Do NOT store this as the site's login token. The existing index.html owns auth state.
-        if (body) body.style.display = 'none';
-        if (success) {
-          success.style.display = 'block';
-          const p = success.querySelector('p');
-          if (p) p.textContent = 'Prijava je uspješno poslata. Status: Na čekanju. Kada bude prihvaćena, moći ćeš se prijaviti u LSPD panel.';
-        }
-      } catch (err) {
-        console.error(err);
-        showApplyError(err.message || 'Greška pri slanju prijave.');
-      } finally {
-        if (btn) { btn.disabled = false; btn.textContent = 'Pošalji prijavu'; }
-      }
-    }, true);
-  }
-
-  window.OvercastAuthGate = {
-    getApplication,
-    createOrLogin,
-    checkAccess: async function () {
-      const token = localStorage.getItem('overcast_access_token');
-      if (!token) return { loggedIn: false, allowed: false };
-      const r = await nativeFetch(AUTH + '/user', {
-        headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + token }
-      });
-      if (!r.ok) return { loggedIn: false, allowed: false };
-      const user = await r.json();
-      const application = await getApplication(user.id, token);
-      return { loggedIn: true, allowed: !!(application && application.status === 'Prihvaćena'), user, application };
-    }
-  };
-
-  document.addEventListener('DOMContentLoaded', installApplicationHandler);
+  document.addEventListener('DOMContentLoaded',function(){installApplicationHandler();loadUsersModule();});
 })();
