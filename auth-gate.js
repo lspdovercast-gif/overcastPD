@@ -1,105 +1,46 @@
-/* OverCast RP - applicant access gate
-   Applicants create their own Supabase account while submitting the application.
-   Access to the panel is granted only when applications.status = 'Prihvaćena'. */
+/* OverCast RP - Applicant access gate */
 (function () {
-  const originalFetch = window.fetch.bind(window);
+  const SUPABASE_URL = 'https://rjusdokmtdnwvsuvxjow.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_-aKDZyBp1l5IRsGPmlGnsw_nPY_c827';
+  const API = SUPABASE_URL + '/rest/v1';
+  const AUTH = SUPABASE_URL + '/auth/v1';
 
-  async function findApplicationByUser(userId, token) {
-    const url = SUPABASE_URL + '/rest/v1/applications?user_id=eq.' + encodeURIComponent(userId) + '&select=id,fullname,status,email&limit=1';
-    const res = await originalFetch(url, {
-      headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + token }
-    });
-    if (!res.ok) return null;
-    const rows = await res.json();
-    return rows[0] || null;
+  async function supa(path, options = {}) {
+    const headers = Object.assign({ apikey: SUPABASE_KEY, 'Content-Type': 'application/json' }, options.headers || {});
+    return fetch(path, Object.assign({}, options, { headers }));
   }
 
-  window.fetchMyProfile = async function (userId) {
-    const fallback = { can_view_applications: false, is_admin: false, is_super_admin: false, fullname: null, rank: null };
-    if (!userId || !accessToken) throw new Error('Neispravan nalog.');
-
-    const adminRes = await originalFetch(
-      SUPABASE_URL + '/rest/v1/admin_permissions?user_id=eq.' + encodeURIComponent(userId) + '&select=can_view_applications,is_admin,is_super_admin,fullname,rank',
-      { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken } }
-    );
-    if (adminRes.ok) {
-      const admins = await adminRes.json();
-      if (admins[0] && (admins[0].is_admin || admins[0].is_super_admin || admins[0].can_view_applications)) {
-        return admins[0];
-      }
-    }
-
-    const app = await findApplicationByUser(userId, accessToken);
-    if (!app) throw new Error('Nema pronađene prijave za ovaj nalog. Prvo pošalji prijavu.');
-    if (app.status !== 'Prihvaćena') {
-      if (app.status === 'Odbijena') throw new Error('Tvoja prijava je odbijena.');
-      throw new Error('Tvoja prijava je još na čekanju. Sačekaj da bude prihvaćena.');
-    }
-
-    return {
-      can_view_applications: false,
-      is_admin: false,
-      is_super_admin: false,
-      fullname: app.fullname || userEmail,
-      rank: 'LSPD'
-    };
-  };
-
-  window.fetch = async function (input, init) {
-    const url = typeof input === 'string' ? input : (input && input.url) || '';
-    const method = ((init && init.method) || (typeof input !== 'string' && input && input.method) || 'GET').toUpperCase();
-
-    if (method === 'POST' && url.indexOf(SUPABASE_URL + '/rest/v1/applications') === 0) {
-      const body = init && init.body ? JSON.parse(init.body) : {};
-      const email = (document.getElementById('applyEmail')?.value || '').trim().toLowerCase();
-      const password = document.getElementById('applyPassword')?.value || '';
-
-      if (!email || password.length < 6) {
-        return new Response(JSON.stringify({ message: 'Unesi ispravan email i lozinku (minimum 6 znakova).' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-      }
-
-      const signup = await originalFetch(SUPABASE_URL + '/auth/v1/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY },
-        body: JSON.stringify({ email, password })
+  window.OvercastAuthGate = {
+    async login(email, password) {
+      const r = await supa(AUTH + '/token?grant_type=password', { method: 'POST', body: JSON.stringify({ email, password }) });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error_description || data.msg || data.message || 'Pogrešan email ili lozinka.');
+      localStorage.setItem('overcast_access_token', data.access_token);
+      return data;
+    },
+    async getApplication(userId, token) {
+      const r = await fetch(API + '/applications?user_id=eq.' + encodeURIComponent(userId) + '&select=id,fullname,email,status&limit=1', {
+        headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + token }
       });
-      const signupData = await signup.json().catch(() => ({}));
-
-      if (!signup.ok && !String(signupData.msg || signupData.message || '').toLowerCase().includes('already')) {
-        return new Response(JSON.stringify({ message: signupData.msg || signupData.message || 'Nije moguće napraviti nalog.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      if (!r.ok) return null;
+      const rows = await r.json();
+      return rows[0] || null;
+    },
+    async checkAccess() {
+      const token = localStorage.getItem('overcast_access_token');
+      if (!token) return { loggedIn: false, allowed: false, reason: 'Nisi prijavljen.' };
+      const r = await fetch(AUTH + '/user', { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + token } });
+      if (!r.ok) {
+        localStorage.removeItem('overcast_access_token');
+        return { loggedIn: false, allowed: false, reason: 'Sesija je istekla.' };
       }
-
-      let token = signupData.access_token;
-      let userId = signupData.user && signupData.user.id;
-
-      if (!token) {
-        const login = await originalFetch(SUPABASE_URL + '/auth/v1/token?grant_type=password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY },
-          body: JSON.stringify({ email, password })
-        });
-        const loginData = await login.json().catch(() => ({}));
-        if (!login.ok || !loginData.access_token) {
-          return new Response(JSON.stringify({ message: 'Nalog je napravljen, ali email mora biti potvrđen prije slanja prijave.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-        }
-        token = loginData.access_token;
-        userId = loginData.user && loginData.user.id;
-      }
-
-      body.user_id = userId;
-      body.email = email;
-      return originalFetch(url, {
-        ...init,
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: SUPABASE_KEY,
-          Authorization: 'Bearer ' + token,
-          Prefer: 'return=minimal'
-        },
-        body: JSON.stringify(body)
-      });
-    }
-
-    return originalFetch(input, init);
+      const user = await r.json();
+      const application = await this.getApplication(user.id, token);
+      if (!application) return { loggedIn: true, allowed: false, reason: 'Nema pronađene prijave za ovaj nalog.', user, application: null };
+      if (application.status === 'Prihvaćena') return { loggedIn: true, allowed: true, reason: '', user, application };
+      if (application.status === 'Odbijena') return { loggedIn: true, allowed: false, reason: 'Tvoja prijava je odbijena.', user, application };
+      return { loggedIn: true, allowed: false, reason: 'Tvoja prijava je još na čekanju.', user, application };
+    },
+    logout() { localStorage.removeItem('overcast_access_token'); location.reload(); }
   };
 })();
